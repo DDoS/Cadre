@@ -1,0 +1,12 @@
+{
+    "name": "encre",
+    "version": "0.0.1",
+    "description": "",
+    "homepage": "https://github.com/DDoS/cadre",
+    "license": "AGPL-3.0",
+    "dependencies": [
+        "qhull",
+        "glm",
+        "pybind11"
+    ]
+  }

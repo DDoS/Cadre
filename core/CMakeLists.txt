@@ -4,6 +4,7 @@ add_library(encre SHARED)
 
 set_target_properties(encre PROPERTIES
     INTERPROCEDURAL_OPTIMIZATION ON
+    INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON)
 set(export_header_path "${CMAKE_CURRENT_SOURCE_DIR}/include/encre_export.hpp")

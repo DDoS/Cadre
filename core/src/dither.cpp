@@ -171,7 +171,7 @@ namespace encre {
         if (vips_check_uncoded("dither", in.get_image()) ||
                 vips_check_bands("dither", in.get_image(), 3) ||
                 vips_check_format("dither", in.get_image(), VIPS_FORMAT_FLOAT)) {
-            throw vips::VError();
+            throw vips::VError("Invalid dither image format. Expected uncoded with 3 float bands.");
         }
 
         in = in.copy_memory();

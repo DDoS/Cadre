@@ -116,9 +116,28 @@ namespace encre {
             return false;
         }
 
+        vips::VImage image;
+        std::exception vips_load_error;
         try {
-            auto image = vips::VImage::new_from_file(image_path, vips::VImage::option()->
+            image = vips::VImage::new_from_file(image_path, vips::VImage::option()->
                 set("access", VIPS_ACCESS_SEQUENTIAL)->set("autorotate", true));
+        } catch (const std::exception& error) {
+            vips_load_error = error;
+        }
+
+        try {
+            if (image.is_null()) {
+                // Image format might have been misidentified: explicitly retry with Magick.
+                image = vips::VImage::magickload(image_path, vips::VImage::option()->
+                    set("access", VIPS_ACCESS_SEQUENTIAL)->set("autorotate", true));
+            }
+        } catch (const std::exception& magick_error) {
+            std::cerr << "VIPS load error: " << vips_load_error.what() << "\n";
+            std::cerr << "Magick load error: " << magick_error.what() << "\n";
+            return false;
+        }
+
+        try {
             image = image.icc_import(vips::VImage::option()->set("pcs", VipsPCS::VIPS_PCS_XYZ)->
                 set("intent", VipsIntent::VIPS_INTENT_PERCEPTUAL)->set("embedded", true));
 
@@ -142,11 +161,11 @@ namespace encre {
                 image = encre::oklab_to_xyz(image);
                 image.write_to_file(dithered_image_path);
             }
-
-            return true;
-        } catch (const vips::VError& error) {
-            error.ostream_print(std::cerr);
+        } catch (const std::exception& error) {
+            std::cerr << error.what() << "\n";
             return false;
         }
+
+        return true;
     }
 }

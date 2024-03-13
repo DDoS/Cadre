@@ -19,10 +19,12 @@ Upgrade cmake:
 
 Install libvips format dependencies:
    https://github.com/libvips/libvips#optional-dependencies
+   graphicsmagick-libmagick-dev-compat liborc-0.4-dev libtiff-dev libfftw3-dev
+       liblcms2-dev libexif-dev libjpeg-dev libpng-dev libwebp-dev
 
 Build libvips from source:
     https://www.libvips.org/install.html
-    use: --buildtype=release
+    run: meson setup build-dir --buildtype=release --libdir=lib
 
 Add vcpkg environment variables to ~/.profile:
     export PATH="$PATH:$HOME/vcpkg"
@@ -32,7 +34,7 @@ Add vcpkg environment variables to ~/.profile:
 
 Install vcpkg:
     clone: https://github.com/microsoft/vcpkg.git
-    run: ./bootstrap-vcpkg.sh 
+    run: ./bootstrap-vcpkg.sh
 
 Build cadre:
     run: cmake --preset release

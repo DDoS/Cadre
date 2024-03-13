@@ -1,16 +1,18 @@
 # Cadre
 
-Cadre is a colour e-ink picture frame project. It aims for improved colour accuracy,
-and cloud photo hosting integration, and easy deployment.
+Cadre is a colour e-ink picture frame project. It aims for:
+- Improved colour accuracy,
+- Cloud photo hosting integration
+- Easy deployment.
 
 It's split up into multiple components:
-- Encre: convert image files to a native e-ink display palette
-- Affiche: Local web interface
-- Album: Cloud photo hosting integration
+- [Encre](#encre): convert image files to a native e-ink display palette
+- [Affiche](#affiche): Local web interface
+- [Album](#album): Cloud photo hosting integration
 
 ## Encre
 
-*Convert image files to a native e-ink display palette.*
+*Convert images to an e-ink display palette.*
 
 Functionally complete. Exposes both a C++ and a Python API.
 
@@ -27,7 +29,7 @@ to the originals are possible.
 
 - Install Vcpkg
 - Install pkg-config
-- Install libvips
+- Install libvips (8.15.1 or newer)
 - Run `cmake --preset release && cmake --build --preset release`
 
 Other dependencies are installed by Vcpkg.
@@ -36,7 +38,7 @@ You might have to upgrade CMake, Python or your C++ compiler, the logs should te
 
 There are additional notes specific to the "Raspberry PI Zero 2 W" [here](rp_build_notes.txt).
 
-### Running (draft)
+### Running
 
 If the build succeeds, you can use the CLI tool at `build/release/cli/encre-cli` to
 test image conversions. For example: `build/release/cli/encre-cli test_data/colors.png - -`
@@ -53,7 +55,17 @@ otherwise you can eyeball them... An example is available [here](misc/srgb_palet
 
 ## Affiche
 
-*Coming soon*
+*Local web interface*
+
+After building [Encre](#encre), create a Python virtual environment, and install the
+[requirements](affiche/requirements.txt) using `pip`. Start the server using
+`start.sh`. Use `stop.sh` if you need to stop the server if it's running in the background.
+You will likely need to run using sudo to bind to port `80`.
+
+The server should be available at the host's LAN address. This will depend on your
+system settings.
+
+![screenshot](images/affiche_screenshot.png)
 
 ## Album
 

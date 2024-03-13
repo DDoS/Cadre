@@ -55,7 +55,7 @@ namespace encre {
     };
 
     constexpr float default_target_luminance = 80;
-    constexpr float default_lightness_adaptation_factor = 5;
+    constexpr float default_lightness_adaptation_factor = 50;
 
     // Builtin palette for https://www.waveshare.com/7.3inch-e-paper-hat-f.htm
     ENCRE_EXPORT extern const Palette waveshare_7dot3_inch_e_paper_f_palette;

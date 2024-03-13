@@ -1,0 +1,3 @@
+flask
+inky[rpi]
+pillow # Inky requirement

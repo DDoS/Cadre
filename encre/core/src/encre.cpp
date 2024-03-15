@@ -12,6 +12,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <functional>
+#include <cstdlib>
 
 namespace std {
     template<typename T1, typename T2>
@@ -20,6 +21,11 @@ namespace std {
             return std::hash<T1>{}(p.first) ^ std::hash<T2>{}(p.second);
         }
     };
+}
+
+namespace {
+    const std::vector<double> oklab_black{0, 0, 0};
+    const std::vector<double> oklab_white{100, 0, 0};
 }
 
 namespace encre {
@@ -37,8 +43,11 @@ namespace encre {
     );
 
     void initialize(const char* executable_path) {
-        if (VIPS_INIT(executable_path))
+        setenv("VIPS_WARNING", "1", true);
+
+        if (VIPS_INIT(executable_path)) {
             vips_error_exit(nullptr);
+        }
     }
 
     void uninitalize() {
@@ -143,9 +152,10 @@ namespace encre {
 
             image = encre::xyz_to_oklab(image);
 
-            static const std::vector<double> oklab_white{100, 0, 0};
+            auto fill_color = oklab_black;
             if (image.has_alpha()) {
-                image = image.flatten(vips::VImage::option()->set("background", oklab_white));
+                fill_color = oklab_white;
+                image = image.flatten(vips::VImage::option()->set("background", fill_color));
             }
 
             const auto horizontal_scale = static_cast<double>(width) / image.width();
@@ -153,7 +163,7 @@ namespace encre {
             image = image.resize(std::min(horizontal_scale, vertical_scale));
 
             image = image.gravity(VipsCompassDirection::VIPS_COMPASS_DIRECTION_CENTRE, width, height,
-                vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", oklab_white));
+                vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));
 
             encre::dither(image, palette, lightness_adaptation_factor, output);
 

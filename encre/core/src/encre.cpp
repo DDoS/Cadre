@@ -1,6 +1,7 @@
 #include "encre.hpp"
 
 #include "oklab.hpp"
+#include "contrast.hpp"
 #include "dither.hpp"
 
 #include <vips/vips8>
@@ -128,8 +129,7 @@ namespace encre {
         vips::VImage image;
         std::exception vips_load_error;
         try {
-            image = vips::VImage::new_from_file(image_path, vips::VImage::option()->
-                set("access", VIPS_ACCESS_SEQUENTIAL)->set("autorotate", true));
+            image = vips::VImage::new_from_file(image_path, vips::VImage::option()->set("autorotate", true));
         } catch (const std::exception& error) {
             vips_load_error = error;
         }
@@ -137,8 +137,7 @@ namespace encre {
         try {
             if (image.is_null()) {
                 // Image format might have been misidentified: explicitly retry with Magick.
-                image = vips::VImage::magickload(image_path, vips::VImage::option()->
-                    set("access", VIPS_ACCESS_SEQUENTIAL)->set("autorotate", true));
+                image = vips::VImage::magickload(image_path, vips::VImage::option()->set("autorotate", true));
             }
         } catch (const std::exception& magick_error) {
             std::cerr << "VIPS load error: " << vips_load_error.what() << "\n";
@@ -154,13 +153,14 @@ namespace encre {
 
             auto fill_color = oklab_black;
             if (image.has_alpha()) {
-                fill_color = oklab_white;
                 image = image.flatten(vips::VImage::option()->set("background", fill_color));
             }
 
             const auto horizontal_scale = static_cast<double>(width) / image.width();
             const auto vertical_scale = static_cast<double>(height) / image.height();
             image = image.resize(std::min(horizontal_scale, vertical_scale));
+
+            image = limit_contrast(image, palette, 0.065f);
 
             image = image.gravity(VipsCompassDirection::VIPS_COMPASS_DIRECTION_CENTRE, width, height,
                 vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));

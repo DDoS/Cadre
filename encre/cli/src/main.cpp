@@ -32,13 +32,13 @@ int main(int arg_count, char** arg_values) {
 
     std::vector<uint8_t> dithered;
     dithered.resize(width * height);
-    if (!encre::convert(input_image_path.c_str(), width, height, encre::waveshare_7dot3_inch_e_paper_f_palette,
+    if (encre::convert(input_image_path.c_str(), width, height, encre::waveshare_7dot3_inch_e_paper_f_palette,
             dithered, dithered_image_path.empty() ? nullptr : dithered_image_path.c_str())) {
+        std::ofstream fs{output_image_path, std::ios::binary};
+        fs.write(reinterpret_cast<const char*>(dithered.data()), dithered.size() * sizeof(uint8_t));
+    } else {
         std::cerr << "Failed\n";
     }
-
-    std::ofstream fs{output_image_path, std::ios::binary};
-    fs.write(reinterpret_cast<const char*>(dithered.data()), dithered.size() * sizeof(uint8_t));
 
     encre::uninitalize();
 }

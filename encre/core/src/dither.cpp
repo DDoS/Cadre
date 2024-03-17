@@ -23,7 +23,7 @@ namespace {
     }
 
     // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent
-    glm::vec3 compute_gamut_clamp_target(const encre::Palette& palette, float alpha, const float l, const float chroma) {
+    glm::vec3 compute_gamut_clamp_target(const encre::Palette& palette, float alpha, float l, float chroma) {
         const auto range = palette.gray_line.y - palette.gray_line.x;
 
         const auto l_start = (l - palette.gray_line.x) / range;

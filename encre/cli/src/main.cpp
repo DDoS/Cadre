@@ -7,7 +7,8 @@
 #include <filesystem>
 
 int main(int arg_count, char** arg_values) {
-    argparse::ArgumentParser arguments("encre-cli");
+    argparse::ArgumentParser arguments("encre-cli", "0.0.1");
+    arguments.add_description("Command line interface for Encre");
     arguments.add_argument("input_image");
     arguments.add_argument("-w", "--width").scan<'u', uint32_t>().metavar("width").help("output width").default_value(800u);
     arguments.add_argument("-h", "--height").scan<'u', uint32_t>().metavar("height").help("output height").default_value(480u);

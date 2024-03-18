@@ -36,7 +36,7 @@ def main():
         out_path = str(arguments.out_path)
 
     if not py_encre.convert(str(arguments.image_path), py_encre.waveshare_7dot3_inch_e_paper_f_palette,
-                            image, out_path):
+                            image, dithered_image_path=out_path):
         print('Conversion failed')
         sys.exit(1)
 
@@ -47,7 +47,7 @@ def main():
         display.show()
     else:
         import time
-        time.sleep(45)
+        time.sleep(5)
 
 
 if __name__ == '__main__':

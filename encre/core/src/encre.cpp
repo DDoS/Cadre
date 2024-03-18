@@ -118,8 +118,8 @@ namespace encre {
         return make_palette(xyz_elements, target_luminance);
     }
 
-    bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette,
-            std::span<uint8_t> output, const char* dithered_image_path, float lightness_adaptation_factor) {
+    bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette, const Options& options,
+            std::span<uint8_t> output, const char* dithered_image_path) {
 
         if (output.size() < width * height) {
             std::cerr << "Output buffer is too small\n";
@@ -160,12 +160,12 @@ namespace encre {
             const auto vertical_scale = static_cast<double>(height) / image.height();
             image = image.resize(std::min(horizontal_scale, vertical_scale));
 
-            image = limit_contrast(image, palette, 0.065f);
+            image = limit_contrast(image, palette, options.contrast_coverage_percent, options.contrast_compression);
 
             image = image.gravity(VipsCompassDirection::VIPS_COMPASS_DIRECTION_CENTRE, width, height,
                 vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));
 
-            encre::dither(image, palette, lightness_adaptation_factor, output);
+            encre::dither(image, palette, options.clipped_gamut_recovery, output);
 
             if (dithered_image_path) {
                 image = encre::oklab_to_xyz(image);

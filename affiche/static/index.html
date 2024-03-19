@@ -13,14 +13,17 @@
                 const statusText = document.getElementById("status");
                 const subStatusText = document.getElementById("sub-status");
 
-                const uploadButton = document.getElementById("upload-button");
                 const fileInput = document.getElementById("file-input");
+                const optionsHeader = document.getElementById("options-header");
+                const optionsHeaderIcon = document.getElementById("options-header-icon");
+                const optionsFoldout = document.getElementById("options-foldout");
+                const uploadButton = document.getElementById("upload-button");
 
                 const previewImageGroup = document.getElementById("preview-image-group");
                 const previewImage = document.getElementById("preview-image");
 
-                var hasFile = fileInput.value.length > 0;
-                var isBusy = true;
+                let hasFile = fileInput.value.length > 0;
+                let isBusy = true;
                 const updateUploadButton = forceDisable => {
                     uploadButton.disabled = !hasFile || isBusy;
                 };
@@ -31,16 +34,27 @@
                     updateUploadButton();
                 });
 
+                let showOptions = false;
+                optionsHeader.addEventListener("click", () => {
+                    showOptions ^= true;
+                    if (showOptions) {
+                        optionsFoldout.style.maxHeight = "500px";
+                    } else {
+                        optionsFoldout.style.maxHeight = null;
+                    }
+                    optionsHeaderIcon.classList.toggle("affiche-options-header__icon--opened");
+                });
+
                 const getStatus = async () => {
                     const response = await fetch(new Request("/status"));
                     if (!response.ok) {
                         return;
                     }
 
-                    var statusData = await response.json();
+                    let statusData = await response.json();
 
                     isBusy = false;
-                    var status = "Display status is unknown.";
+                    let status = "Display status is unknown.";
                     switch (statusData.status) {
                         case "BUSY":
                             status = "The display is being updated. This will take a few minutes.";
@@ -57,7 +71,7 @@
                     statusText.innerHTML = status;
                     updateUploadButton();
 
-                    var subStatus = "";
+                    let subStatus = "";
                     switch (statusData.subStatus) {
                         case "NONE":
                             break;
@@ -86,15 +100,45 @@
         </script>
     </head>
     <body>
-        <div class="affiche-div">
+        <div class="affiche-column">
             <div class="affiche-title">Affiche</div>
             <div class="affiche-status" id="status"></div>
             <div class="affiche-sub-status" id="sub-status"></div>
-            <form class="affiche-div affiche-upload-form" method="post" enctype="multipart/form-data">
+            <form class="affiche-column affiche-upload-form" method="post" enctype="multipart/form-data">
                 <input class="affiche-file-input" id="file-input" type="file" name="file">
                 <button class="affiche-submit" id="upload-button" type="submit" name="submit" value="upload">Upload</button>
+                <div class="affiche-options-collapsible">
+                    <div class="affiche-options-header" id="options-header">
+                        <div class="affiche-options-header__icon" id="options-header-icon"></div>
+                        <div class="affiche-options-header__title" id="options-header-title">Options</div>
+                    </div>
+                    <div class="affiche-options" id="options-foldout">
+                        <div class="affiche-option">
+                            <label for="rotation">Orientation:</label>
+                            <select name="rotation" id="rotation">
+                                <option value="automatic">Automatic</option>
+                                <option value="landscape">Landscape</option>
+                                <option value="portrait">Portrait</option>
+                                <option value="landscape_upside_down">Landscape upside-down</option>
+                                <option value="portrait_upside_down">Portrait upside-down</option>
+                            </select>
+                        </div>
+                        <div class="affiche-option">
+                            <label for="contrast-coverage-percent">Contrast coverage:</label>
+                            <input type="number" id="contrast-coverage-percent" name="contrast_coverage_percent" step="0.01" />
+                        </div>
+                        <div class="affiche-option">
+                            <label for="contrast-compression">Contrast compression:</label>
+                            <input type="number" id="contrast-compression" name="contrast_compression" step="0.001" />
+                        </div>
+                        <div class="affiche-option">
+                            <label for="clipped-gamut-recovery">Clipped gamut recovery:</label>
+                            <input type="number" id="clipped-gamut-recovery" name="clipped_gamut_recovery" step="0.01" />
+                        </div>
+                    </div>
+                </div>
             </form>
-            <div id="preview-image-group" class="affiche-div">
+            <div id="preview-image-group" class="affiche-column">
                 <img class="affiche-preview" id="preview-image" src="" alt="Preview of the picture on display." style="max-width: 85vw;" />
                 <div class="affiche-preview-title">Currently on display.</div>
             </div>

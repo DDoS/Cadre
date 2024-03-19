@@ -40,11 +40,20 @@ PYBIND11_MODULE(py_encre, m) {
         def_readwrite("gamut_hull", &encre::Palette::gamut_hull).
         def_readwrite("gray_line", &encre::Palette::gray_line);
 
+    py::enum_<encre::Rotation>(m, "Rotation").
+        value("automatic", encre::Rotation::automatic).
+        value("landscape", encre::Rotation::landscape).
+        value("portrait", encre::Rotation::portrait).
+        value("landscape_upside_down", encre::Rotation::landscape_upside_down).
+        value("portrait_upside_down", encre::Rotation::portrait_upside_down);
+
     py::class_<encre::Options>(m, "Options").
         def(py::init()).
+        def_readonly_static("default_rotation", &encre::Options::default_rotation).
         def_readonly_static("default_contrast_coverage_percent", &encre::Options::default_contrast_coverage_percent).
         def_readonly_static("default_contrast_compression", &encre::Options::default_contrast_compression).
         def_readonly_static("default_clipped_gamut_recovery", &encre::Options::default_clipped_gamut_recovery).
+        def_readwrite("rotation", &encre::Options::rotation).
         def_readwrite("contrast_coverage_percent", &encre::Options::contrast_coverage_percent).
         def_readwrite("contrast_compression", &encre::Options::contrast_compression).
         def_readwrite("clipped_gamut_recovery", &encre::Options::clipped_gamut_recovery);

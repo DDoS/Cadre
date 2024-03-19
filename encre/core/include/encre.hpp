@@ -56,11 +56,21 @@ namespace encre {
         glm::vec2 gray_line;
     };
 
+    enum class Rotation {
+        automatic,
+        landscape,
+        portrait,
+        landscape_upside_down,
+        portrait_upside_down
+    };
+
     struct Options {
+        static constexpr Rotation default_rotation = Rotation::automatic;
         static constexpr float default_contrast_coverage_percent = 0.95f;
         static constexpr float default_contrast_compression = 0.065f;
         static constexpr float default_clipped_gamut_recovery = 0.5f;
 
+        Rotation rotation = default_rotation;
         float contrast_coverage_percent = default_contrast_coverage_percent;
         float contrast_compression = default_contrast_compression;
         float clipped_gamut_recovery = default_clipped_gamut_recovery;

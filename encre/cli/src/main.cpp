@@ -5,6 +5,18 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <map>
+
+namespace {
+    // Using std::map to keep the name ordering consistent in the CLI help
+    const std::map<std::string, encre::Rotation> rotation_from_string{
+        {"automatic", encre::Rotation::automatic},
+        {"landscape", encre::Rotation::landscape},
+        {"portrait", encre::Rotation::portrait},
+        {"landscape_upside_down", encre::Rotation::landscape_upside_down},
+        {"portrait_upside_down", encre::Rotation::portrait_upside_down}
+    };
+}
 
 int main(int arg_count, char** arg_values) {
     argparse::ArgumentParser arguments("encre-cli", "0.0.1");
@@ -14,9 +26,13 @@ int main(int arg_count, char** arg_values) {
     arguments.add_argument("-h", "--height").scan<'u', uint32_t>().metavar("height").help("output height").default_value(480u);
     arguments.add_argument("-o", "--out").metavar("output_binary").help("output binary").default_value("-");
     arguments.add_argument("-d", "--dithered").metavar("output_dithered_image").help("output dithered image").default_value("-");
-    arguments.add_argument("-r", "--contrast-coverage-percent").scan<'g', float>().metavar("percentage").help("contrast coverage percent");
+    arguments.add_argument("-p", "--contrast-coverage-percent").scan<'g', float>().metavar("percentage").help("contrast coverage percent");
     arguments.add_argument("-c", "--contrast-compression").scan<'g', float>().metavar("factor").help("contrast compression");
     arguments.add_argument("-g", "--clipped-gamut-recovery").scan<'g', float>().metavar("factor").help("clipped gamut recovery");
+    auto& rotation_argument = arguments.add_argument("-r", "--rotation").metavar("orientation").help("image rotation");
+    for (const auto& [name, _] : rotation_from_string) {
+        rotation_argument.add_choice(name);
+    }
 
     try {
         arguments.parse_args(arg_count, arg_values);
@@ -42,7 +58,9 @@ int main(int arg_count, char** arg_values) {
     }
 
     encre::Options options{};
-    if (const auto value = arguments.present<float>("-r"))
+    if (const auto value = arguments.present("-r"))
+        options.rotation = rotation_from_string.at(*value);
+    if (const auto value = arguments.present<float>("-p"))
         options.contrast_coverage_percent = *value;
     if (const auto value = arguments.present<float>("-c"))
         options.contrast_compression = *value;

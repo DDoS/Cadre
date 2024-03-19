@@ -1,6 +1,7 @@
 from pathlib import Path
 import subprocess
 from enum import Enum
+import json
 import random
 import threading
 import traceback
@@ -77,7 +78,7 @@ def update_display_writer_preview(preview_path: Path):
         if preview_path is not None:
             preview_path.unlink(missing_ok=True)
 
-def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path) -> bool:
+def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path, options: dict[str]) -> bool:
     global display_writer_last_status
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
@@ -88,8 +89,9 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path) ->
         global display_writer_last_sub_status
 
         try:
+            options_string = json.dumps(options)
             process = subprocess.Popen(['python3', '-u', exec_path, image_path,
-                                        '--out-path', preview_path, '--status'],
+                                        '--out', preview_path, '--options', options_string, '--status'],
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
             display_writer_last_status = DisplayWriterStatus.BUSY
@@ -148,7 +150,7 @@ def upload_file():
     if request.method == 'GET':
         return app.send_static_file('index.html')
 
-    file = request.files.get('file', '')
+    file = request.files.get('file')
     if not file:
         return redirect(request.url)
 
@@ -166,7 +168,16 @@ def upload_file():
 
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
 
-    if not run_display_writer(exec_path, file_path, preview_path):
+    options = {}
+    for name, type in [('rotation', str), ('contrast_coverage_percent', float),
+                       ('contrast_compression', float), ('clipped_gamut_recovery', float)]:
+        try:
+            if value := request.form.get(name, type=type):
+                options[name] = value
+        except ValueError:
+            pass
+
+    if not run_display_writer(exec_path, file_path, preview_path, options):
         return redirect(request.url)
 
     return redirect(request.url)

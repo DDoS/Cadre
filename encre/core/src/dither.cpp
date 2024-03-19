@@ -23,7 +23,7 @@ namespace {
     }
 
     // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent
-    glm::vec3 compute_gamut_clamp_target(const encre::Palette& palette, float alpha, const float l, const float chroma) {
+    glm::vec3 compute_gamut_clamp_target(const encre::Palette& palette, float alpha, float l, float chroma) {
         const auto range = palette.gray_line.y - palette.gray_line.x;
 
         const auto l_start = (l - palette.gray_line.x) / range;
@@ -34,9 +34,9 @@ namespace {
         return {l_target * range + palette.gray_line.x, 0, 0};
     }
 
-    glm::vec3 clamp_to_palette_gamut(const encre::Palette& palette, float lightness_adaptation_factor, const glm::vec3& lab) {
+    glm::vec3 clamp_to_palette_gamut(const encre::Palette& palette, float clipped_gamut_recovery, const glm::vec3& lab) {
         const auto chroma = glm::length(glm::yz(lab));
-        const auto alpha = lightness_adaptation_factor;
+        const auto alpha = clipped_gamut_recovery;
         const auto min_max_gray = palette.gray_line + glm::vec2(epsilon, -epsilon);
         if (chroma < epsilon || alpha < epsilon && (lab.x < min_max_gray.x || lab.x > min_max_gray.y)) {
             return {glm::clamp(lab.x, palette.gray_line.x, palette.gray_line.y), 0, 0};
@@ -73,7 +73,7 @@ namespace {
         return clamped_lab;
     }
 
-    void clamp_gamut_batch(const encre::Palette& palette, float lightness_adaptation_factor, const vips::VRegion& in_region) {
+    void clamp_gamut_batch(const encre::Palette& palette, float clipped_gamut_recovery, const vips::VRegion& in_region) {
         const auto in_rectangle = in_region.valid();
 
         for (int y = 0; y < in_rectangle.height; y++) {
@@ -86,7 +86,7 @@ namespace {
                     continue;
                 }
 
-                const auto clamped_lab = clamp_to_palette_gamut(palette, lightness_adaptation_factor, lab);
+                const auto clamped_lab = clamp_to_palette_gamut(palette, clipped_gamut_recovery, lab);
 
                 #ifndef NDEBUG
                 if (!glm::all(glm::isfinite(clamped_lab)) || !is_inside_palette_gamut(palette, clamped_lab)) {
@@ -167,7 +167,7 @@ namespace {
 }
 
 namespace encre {
-    void dither(vips::VImage& in, const Palette& palette, float lightness_adaptation_factor, std::span<uint8_t> result) {
+    void dither(vips::VImage& in, const Palette& palette, float clipped_gamut_recovery, std::span<uint8_t> result) {
         if (vips_check_uncoded("dither", in.get_image()) ||
                 vips_check_bands("dither", in.get_image(), 3) ||
                 vips_check_format("dither", in.get_image(), VIPS_FORMAT_FLOAT)) {
@@ -186,7 +186,7 @@ namespace encre {
 
         for (int y = 0; y < height; y++) {
             in_region.prepare(0, y, width, 1);
-            clamp_gamut_batch(palette, lightness_adaptation_factor, in_region);
+            clamp_gamut_batch(palette, clipped_gamut_recovery, in_region);
         }
 
         for (int y = 0; y < height; y++) {

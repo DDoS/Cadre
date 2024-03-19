@@ -49,13 +49,22 @@ namespace encre {
     };
 
     struct Palette {
+        static constexpr float default_target_luminance = 80;
+
         std::vector<Oklab> elements;
         std::vector<Plane> gamut_hull;
         glm::vec2 gray_line;
     };
 
-    constexpr float default_target_luminance = 80;
-    constexpr float default_lightness_adaptation_factor = 50;
+    struct Options {
+        static constexpr float default_contrast_coverage_percent = 0.95f;
+        static constexpr float default_contrast_compression = 0.065f;
+        static constexpr float default_clipped_gamut_recovery = 0.5f;
+
+        float contrast_coverage_percent = default_contrast_coverage_percent;
+        float contrast_compression = default_contrast_compression;
+        float clipped_gamut_recovery = default_clipped_gamut_recovery;
+    };
 
     // Builtin palette for https://www.waveshare.com/7.3inch-e-paper-hat-f.htm
     ENCRE_EXPORT extern const Palette waveshare_7dot3_inch_e_paper_f_palette;
@@ -64,10 +73,10 @@ namespace encre {
 
     ENCRE_EXPORT void uninitalize();
 
-    ENCRE_EXPORT Palette make_palette(std::span<const CIEXYZ> colors, float target_luminance = default_target_luminance);
+    ENCRE_EXPORT Palette make_palette(std::span<const CIEXYZ> colors, float target_luminance = Palette::default_target_luminance);
 
-    ENCRE_EXPORT Palette make_palette(std::span<const CIELab> colors, float target_luminance = default_target_luminance);
+    ENCRE_EXPORT Palette make_palette(std::span<const CIELab> colors, float target_luminance = Palette::default_target_luminance);
 
-    ENCRE_EXPORT bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette, std::span<uint8_t> output,
-            const char* dithered_image_path = nullptr, float lightness_adaptation_factor = default_lightness_adaptation_factor);
+    ENCRE_EXPORT bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette, const Options& options,
+            std::span<uint8_t> output, const char* dithered_image_path = nullptr);
 }

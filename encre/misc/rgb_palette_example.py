@@ -11,18 +11,18 @@ def main():
     parser.add_argument('image_out_path', metavar='path', type=Path, help='Converted image')
     arguments = parser.parse_args()
 
-    # Black, sRGB primaries, and white
-    palette = py_encre.make_palette_xyz([
-        py_encre.CIEXYZ(0, 0, 0),
-        py_encre.CIEXYZ(41.246, 21.267, 1.933),
-        py_encre.CIEXYZ(35.758, 71.515, 11.919),
-        py_encre.CIEXYZ(18.044, 7.217, 95.03),
-        py_encre.CIEXYZ(95.047, 100, 108.883)
-    ], target_luminance=100)
+    # Some kind of e-ink kaleido display. It has rather awful color reproduction...
+    # https://www.data-modul.com/sites/default/files/products/SA1452-EHA-specification-12051786.pdf
+    palette = py_encre.make_palette_lab([
+        py_encre.CIELab(5, 0, 0), # Missing from data sheet, just a guess
+        py_encre.CIELab(32.81, 5.29, 0.12),
+        py_encre.CIELab(35.99, -8.52, 2.97),
+        py_encre.CIELab(33.04, -4.19, -8.16)
+    ], target_luminance=90)
 
     image = np.zeros((480, 800), np.uint8)
     if not py_encre.convert(str(arguments.image_in_path), palette, image,
-                            str(arguments.image_out_path), lightness_adaptation_factor=0):
+                            dithered_image_path=str(arguments.image_out_path)):
         print("Conversion failed")
         sys.exit(1)
 

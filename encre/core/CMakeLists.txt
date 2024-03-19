@@ -11,13 +11,15 @@ set(export_header_path "${CMAKE_CURRENT_SOURCE_DIR}/include/encre_export.hpp")
 
 target_include_directories(encre PUBLIC "include")
 target_sources(encre PRIVATE
-    "src/encre.cpp"
-    "src/dither.hpp"
-    "src/dither.cpp"
-    "src/oklab.hpp"
-    "src/oklab.cpp"
     "include/encre.hpp"
     "${export_header_path}"
+    "src/contrast.cpp"
+    "src/contrast.hpp"
+    "src/dither.hpp"
+    "src/dither.cpp"
+    "src/encre.cpp"
+    "src/oklab.hpp"
+    "src/oklab.cpp"
 )
 generate_export_header(encre EXPORT_FILE_NAME "${export_header_path}")
 

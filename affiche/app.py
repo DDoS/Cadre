@@ -4,23 +4,43 @@ from enum import Enum
 import random
 import threading
 import traceback
+from logging.config import dictConfig
 
 from flask import Flask, request, redirect, send_file, url_for
 from werkzeug.utils import secure_filename
 
+SERVER_PATH = Path(__file__).parent
+TEMP_PATH = SERVER_PATH / 'temp'
+TEMP_PATH.mkdir(exist_ok=True)
+
+dictConfig({
+    'version': 1,
+    'handlers': {
+        'file.handler': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(TEMP_PATH / 'app.log'),
+            'maxBytes': 10_000_000,
+            'backupCount': 2,
+            'level': 'DEBUG',
+        },
+    },
+    'loggers': {
+        'werkzeug': {
+            'level': 'DEBUG',
+            'handlers': ['file.handler'],
+        },
+    },
+})
 
 def delete_all_files(directory: Path):
     [file.unlink() for file in directory.iterdir() if file.is_file()]
 
-
-SERVER_PATH = Path(__file__).parent
-
-UPLOAD_PATH = SERVER_PATH / 'temp/upload'
-UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+UPLOAD_PATH = TEMP_PATH / 'upload'
+UPLOAD_PATH.mkdir(exist_ok=True)
 delete_all_files(UPLOAD_PATH)
 
-PREVIEW_PATH = SERVER_PATH / 'temp/preview'
-PREVIEW_PATH.mkdir(parents=True, exist_ok=True)
+PREVIEW_PATH = TEMP_PATH / 'preview'
+PREVIEW_PATH.mkdir(exist_ok=True)
 delete_all_files(PREVIEW_PATH)
 
 DISPLAY_WRITER_PATH = SERVER_PATH.parent / 'encre/misc/write_to_display.py'
@@ -29,7 +49,7 @@ if not DISPLAY_WRITER_PATH.is_file():
 
 
 DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
-DisplayWriterSubStatus = Enum('DisplayWriterSubStatus', ['NONE', 'CONVERTING', 'DISPLAYING'])
+DisplayWriterSubStatus = Enum('DisplayWriterSubStatus', ['NONE', 'LAUNCHING', 'CONVERTING', 'DISPLAYING'])
 display_writer_last_status = DisplayWriterStatus.READY
 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
 
@@ -73,7 +93,7 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path) ->
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
             display_writer_last_status = DisplayWriterStatus.BUSY
-            display_writer_last_sub_status = DisplayWriterSubStatus.NONE
+            display_writer_last_sub_status = DisplayWriterSubStatus.LAUNCHING
             while True:
                 output_line = process.stdout.readline()
                 if output_line.startswith('Status: '):
@@ -94,10 +114,10 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path) ->
                 exit_code == 0 else DisplayWriterStatus.FAILED
             display_writer_last_sub_status = DisplayWriterSubStatus.NONE
         except Exception:
+            display_writer_last_status = DisplayWriterStatus.FAILED
             traceback.print_exc()
             process.kill()
         finally:
-            display_writer_last_status = DisplayWriterStatus.READY
             display_writer_last_sub_status = DisplayWriterSubStatus.NONE
             update_display_writer_preview(preview_path)
             image_path.unlink(missing_ok=True)

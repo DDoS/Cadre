@@ -50,7 +50,8 @@
                             status = "The display is ready for a new picture.";
                             break
                         case "FAILED":
-                            status = "Something went wrong when displaying the last picture.";
+                            status = "Something went wrong when displaying your picture. " +
+                                    "Make sure it's a valid image file.";
                             break
                     }
                     statusText.innerHTML = status;
@@ -60,6 +61,7 @@
                     switch (statusData.subStatus) {
                         case "NONE":
                             break;
+                        case "LAUNCHING":
                         case "CONVERTING":
                             subStatus = "Processing...";
                             break;

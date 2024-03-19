@@ -3,3 +3,5 @@ build/
 .venv/
 __pycache__/
 temp/
+
+*.log

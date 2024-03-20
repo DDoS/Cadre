@@ -2,6 +2,7 @@
 
 import sys
 import argparse
+import json
 from pathlib import Path
 
 inky_available = False
@@ -16,9 +17,11 @@ def main():
     parser = argparse.ArgumentParser(
         description='Write an image to an Inky display')
     parser.add_argument('image_path', metavar='path', type=Path, help='Image to write')
-    parser.add_argument('--out-path', metavar='path', type=Path, required=False, default=None,
-                        help='Optional dithered image output')
+    parser.add_argument('--preview', metavar='path', type=Path, required=False, default=None,
+                        help='Optional preview image output')
     parser.add_argument('--status', action='store_true', help='Print status')
+    parser.add_argument('--options', metavar='json', type=str, required=False, default={},
+                        help='Options as a JSON encoded string')
     arguments = parser.parse_args()
 
     if inky_available:
@@ -31,12 +34,14 @@ def main():
     if arguments.status:
         print('Status: CONVERTING')
 
-    out_path: str = None
-    if arguments.out_path:
-        out_path = str(arguments.out_path)
+    options = py_encre.Options(**json.loads(arguments.options))
+
+    preview_path: str = None
+    if arguments.preview:
+        preview_path = str(arguments.preview)
 
     if not py_encre.convert(str(arguments.image_path), py_encre.waveshare_7dot3_inch_e_paper_f_palette,
-                            image, dithered_image_path=out_path):
+                            image, options=options, preview_image_path=preview_path):
         print('Conversion failed')
         sys.exit(1)
 
@@ -51,7 +56,7 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.path.append(str(Path(__file__).absolute().parent.parent / 'build' / 'release' / 'py'))
+    sys.path.append(str(Path(__file__).absolute().parent.parent / 'build/release/py'))
     import py_encre
 
     py_encre.initialize(sys.argv[0])

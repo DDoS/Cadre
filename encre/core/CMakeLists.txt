@@ -20,6 +20,7 @@ target_sources(encre PRIVATE
     "src/encre.cpp"
     "src/oklab.hpp"
     "src/oklab.cpp"
+    "src/palette.cpp"
 )
 generate_export_header(encre EXPORT_FILE_NAME "${export_header_path}")
 

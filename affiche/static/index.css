@@ -2,9 +2,10 @@ body {
     font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue",
             Helvetica, Arial, "Lucida Grande", sans-serif;
     background-color: rgb(222, 221, 215);
+    padding: 0 16px;
 }
 
-.affiche-div {
+.affiche-column {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -39,7 +40,58 @@ body {
 }
 
 .affiche-submit {
-    margin-top: 14px;
+    margin-top: 16px;
+}
+
+.affiche-options-collapsible {
+    margin-left: 24px;
+    margin-top: 16px;
+}
+
+.affiche-options-header {
+    display: flex;
+    flex-direction: row;
+    line-height: 100%;
+}
+
+.affiche-options-header__icon {
+    padding-right: 6px;
+}
+
+.affiche-options-header__icon::before {
+    content: '►'
+}
+
+.affiche-options-header__icon--opened::before {
+    content: '▼'
+}
+
+.affiche-options-header__title {
+    font-size: 12pt;
+    font-weight: 600;
+}
+
+.affiche-options {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    row-gap: 4px;
+    margin: 12px 12px 0 12px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out;
+}
+
+.affiche-option {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+}
+
+.affiche-option label {
+    font-size: 11pt;
+    font-weight: 400;
+    padding-right: 8px;
 }
 
 .affiche-preview {

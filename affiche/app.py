@@ -1,26 +1,47 @@
 from pathlib import Path
 import subprocess
 from enum import Enum
+import json
 import random
 import threading
 import traceback
+from logging.config import dictConfig
 
 from flask import Flask, request, redirect, send_file, url_for
 from werkzeug.utils import secure_filename
 
+SERVER_PATH = Path(__file__).parent
+TEMP_PATH = SERVER_PATH / 'temp'
+TEMP_PATH.mkdir(exist_ok=True)
+
+dictConfig({
+    'version': 1,
+    'handlers': {
+        'file.handler': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(TEMP_PATH / 'app.log'),
+            'maxBytes': 10_000_000,
+            'backupCount': 2,
+            'level': 'DEBUG',
+        },
+    },
+    'loggers': {
+        'werkzeug': {
+            'level': 'DEBUG',
+            'handlers': ['file.handler'],
+        },
+    },
+})
 
 def delete_all_files(directory: Path):
     [file.unlink() for file in directory.iterdir() if file.is_file()]
 
-
-SERVER_PATH = Path(__file__).parent
-
-UPLOAD_PATH = SERVER_PATH / 'temp/upload'
-UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+UPLOAD_PATH = TEMP_PATH / 'upload'
+UPLOAD_PATH.mkdir(exist_ok=True)
 delete_all_files(UPLOAD_PATH)
 
-PREVIEW_PATH = SERVER_PATH / 'temp/preview'
-PREVIEW_PATH.mkdir(parents=True, exist_ok=True)
+PREVIEW_PATH = TEMP_PATH / 'preview'
+PREVIEW_PATH.mkdir(exist_ok=True)
 delete_all_files(PREVIEW_PATH)
 
 DISPLAY_WRITER_PATH = SERVER_PATH.parent / 'encre/misc/write_to_display.py'
@@ -29,7 +50,7 @@ if not DISPLAY_WRITER_PATH.is_file():
 
 
 DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
-DisplayWriterSubStatus = Enum('DisplayWriterSubStatus', ['NONE', 'CONVERTING', 'DISPLAYING'])
+DisplayWriterSubStatus = Enum('DisplayWriterSubStatus', ['NONE', 'LAUNCHING', 'CONVERTING', 'DISPLAYING'])
 display_writer_last_status = DisplayWriterStatus.READY
 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
 
@@ -57,7 +78,7 @@ def update_display_writer_preview(preview_path: Path):
         if preview_path is not None:
             preview_path.unlink(missing_ok=True)
 
-def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path) -> bool:
+def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path, options: dict[str]) -> bool:
     global display_writer_last_status
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
@@ -68,12 +89,13 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path) ->
         global display_writer_last_sub_status
 
         try:
+            options_string = json.dumps(options)
             process = subprocess.Popen(['python3', '-u', exec_path, image_path,
-                                        '--out-path', preview_path, '--status'],
+                                        '--preview', preview_path, '--options', options_string, '--status'],
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
             display_writer_last_status = DisplayWriterStatus.BUSY
-            display_writer_last_sub_status = DisplayWriterSubStatus.NONE
+            display_writer_last_sub_status = DisplayWriterSubStatus.LAUNCHING
             while True:
                 output_line = process.stdout.readline()
                 if output_line.startswith('Status: '):
@@ -94,10 +116,10 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path) ->
                 exit_code == 0 else DisplayWriterStatus.FAILED
             display_writer_last_sub_status = DisplayWriterSubStatus.NONE
         except Exception:
+            display_writer_last_status = DisplayWriterStatus.FAILED
             traceback.print_exc()
             process.kill()
         finally:
-            display_writer_last_status = DisplayWriterStatus.READY
             display_writer_last_sub_status = DisplayWriterSubStatus.NONE
             update_display_writer_preview(preview_path)
             image_path.unlink(missing_ok=True)
@@ -128,7 +150,7 @@ def upload_file():
     if request.method == 'GET':
         return app.send_static_file('index.html')
 
-    file = request.files.get('file', '')
+    file = request.files.get('file')
     if not file:
         return redirect(request.url)
 
@@ -146,7 +168,17 @@ def upload_file():
 
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
 
-    if not run_display_writer(exec_path, file_path, preview_path):
+    options = {}
+    for name, type in [('rotation', str), ('contrast_coverage', float),
+                       ('contrast_compression', float), ('clipped_gamut_recovery', float)]:
+        try:
+            value = request.form.get(name, type=type)
+            if value is not None:
+                options[name] = value
+        except ValueError:
+            pass
+
+    if not run_display_writer(exec_path, file_path, preview_path, options):
         return redirect(request.url)
 
     return redirect(request.url)

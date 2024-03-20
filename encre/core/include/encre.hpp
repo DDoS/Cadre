@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vector>
 #include <span>
+#include <map>
 
 namespace encre {
     struct XYZ : glm::vec3 {
@@ -56,15 +57,28 @@ namespace encre {
         glm::vec2 gray_line;
     };
 
+    enum class Rotation {
+        automatic,
+        landscape,
+        portrait,
+        landscape_upside_down,
+        portrait_upside_down
+    };
+
     struct Options {
-        static constexpr float default_contrast_coverage_percent = 0.95f;
+        static constexpr Rotation default_rotation = Rotation::automatic;
+        static constexpr float default_contrast_coverage = 0.95f;
         static constexpr float default_contrast_compression = 0.065f;
         static constexpr float default_clipped_gamut_recovery = 0.5f;
 
-        float contrast_coverage_percent = default_contrast_coverage_percent;
+        Rotation rotation = default_rotation;
+        float contrast_coverage = default_contrast_coverage;
         float contrast_compression = default_contrast_compression;
         float clipped_gamut_recovery = default_clipped_gamut_recovery;
     };
+
+    // Using std::map to keep the name ordering consistent
+    ENCRE_EXPORT extern const std::map<std::string, encre::Rotation> rotation_by_name;
 
     // Builtin palette for https://www.waveshare.com/7.3inch-e-paper-hat-f.htm
     ENCRE_EXPORT extern const Palette waveshare_7dot3_inch_e_paper_f_palette;
@@ -78,5 +92,5 @@ namespace encre {
     ENCRE_EXPORT Palette make_palette(std::span<const CIELab> colors, float target_luminance = Palette::default_target_luminance);
 
     ENCRE_EXPORT bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette, const Options& options,
-            std::span<uint8_t> output, const char* dithered_image_path = nullptr);
+            std::span<uint8_t> output, const char* preview_image_path = nullptr);
 }

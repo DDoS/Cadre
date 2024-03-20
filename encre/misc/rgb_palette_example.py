@@ -22,7 +22,7 @@ def main():
 
     image = np.zeros((480, 800), np.uint8)
     if not py_encre.convert(str(arguments.image_in_path), palette, image,
-                            dithered_image_path=str(arguments.image_out_path)):
+                            preview_image_path=str(arguments.image_out_path)):
         print("Conversion failed")
         sys.exit(1)
 

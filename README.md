@@ -41,9 +41,9 @@ There are additional notes specific to the "Raspberry PI Zero 2 W" [here](encre/
 ### Running
 
 If the build succeeds, you can use the CLI tool at `build/release/cli/encre-cli` to
-test image conversions. For example: `build/release/cli/encre-cli test_data/colors.png -d`
+test image conversions. For example: `build/release/cli/encre-cli test_data/colors.png -p`
 will output `test_data/colors.bin` (palette'd image as raw unsigned bytes) and
-`test_data/colors_dithered.png` as a preview. Run with `-h` for more information.
+`test_data/colors_preview.png` as a preview. Run with `-h` for more information.
 
 If you're running on a machine that has the "Pimoroni Inky" Python library installed, you
 can use [write_to_display.py](encre/misc/write_to_display.py) instead to directly write an image

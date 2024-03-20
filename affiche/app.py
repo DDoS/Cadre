@@ -91,7 +91,7 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path, op
         try:
             options_string = json.dumps(options)
             process = subprocess.Popen(['python3', '-u', exec_path, image_path,
-                                        '--out', preview_path, '--options', options_string, '--status'],
+                                        '--preview', preview_path, '--options', options_string, '--status'],
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
             display_writer_last_status = DisplayWriterStatus.BUSY
@@ -169,10 +169,11 @@ def upload_file():
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
 
     options = {}
-    for name, type in [('rotation', str), ('contrast_coverage_percent', float),
+    for name, type in [('rotation', str), ('contrast_coverage', float),
                        ('contrast_compression', float), ('clipped_gamut_recovery', float)]:
         try:
-            if value := request.form.get(name, type=type):
+            value = request.form.get(name, type=type)
+            if value is not None:
                 options[name] = value
         except ValueError:
             pass

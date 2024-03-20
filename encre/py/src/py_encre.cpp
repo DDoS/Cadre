@@ -4,7 +4,21 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
+#include <string_view>
+#include <optional>
+
 namespace py = pybind11;
+
+namespace {
+    template<typename T>
+    std::optional<T> try_get(const py::object& object, const char* name) {
+        if (!object.contains(name)) {
+            return std::nullopt;
+        }
+
+        return object[name].cast<T>();
+    }
+}
 
 PYBIND11_MODULE(py_encre, m) {
     m.doc() = "Python bindings for Encre";
@@ -48,13 +62,24 @@ PYBIND11_MODULE(py_encre, m) {
         value("portrait_upside_down", encre::Rotation::portrait_upside_down);
 
     py::class_<encre::Options>(m, "Options").
-        def(py::init()).
+        def(py::init([](const py::kwargs& args) {
+            encre::Options options{};
+            if (const auto value = try_get<std::string>(args, "rotation"))
+                options.rotation = encre::rotation_by_name.at(*value);
+            if (const auto value = try_get<float>(args, "contrast_coverage"))
+                options.contrast_coverage = *value;
+            if (const auto value = try_get<float>(args, "contrast_compression"))
+                options.contrast_compression = *value;
+            if (const auto value = try_get<float>(args, "clipped_gamut_recovery"))
+                options.clipped_gamut_recovery = *value;
+            return options;
+        })).
         def_readonly_static("default_rotation", &encre::Options::default_rotation).
-        def_readonly_static("default_contrast_coverage_percent", &encre::Options::default_contrast_coverage_percent).
+        def_readonly_static("default_contrast_coverage", &encre::Options::default_contrast_coverage).
         def_readonly_static("default_contrast_compression", &encre::Options::default_contrast_compression).
         def_readonly_static("default_clipped_gamut_recovery", &encre::Options::default_clipped_gamut_recovery).
         def_readwrite("rotation", &encre::Options::rotation).
-        def_readwrite("contrast_coverage_percent", &encre::Options::contrast_coverage_percent).
+        def_readwrite("contrast_coverage", &encre::Options::contrast_coverage).
         def_readwrite("contrast_compression", &encre::Options::contrast_compression).
         def_readwrite("clipped_gamut_recovery", &encre::Options::clipped_gamut_recovery);
 
@@ -71,12 +96,12 @@ PYBIND11_MODULE(py_encre, m) {
             }, py::arg("colors"), py::arg("target_luminance") = encre::Palette::default_target_luminance, "Make a palette from CIE Lab colors");
 
     m.def("convert", [](const char* image_path, const encre::Palette& palette, py::array_t<uint8_t> output,
-                        const encre::Options& options, const char* dithered_image_path) {
+                        const encre::Options& options, const char* preview_image_path) {
                 auto mutable_output = output.mutable_unchecked<2>();
                 const std::span<uint8_t> output_span{mutable_output.mutable_data(0, 0), static_cast<size_t>(mutable_output.size())};
                 return encre::convert(image_path, static_cast<uint32_t>(mutable_output.shape(1)), static_cast<uint32_t>(mutable_output.shape(0)),
-                        palette, options, output_span, dithered_image_path);
+                        palette, options, output_span, preview_image_path);
             },
             py::arg("image_path"), py::arg("palette"), py::arg("output").noconvert(), py::kw_only(),
-            py::arg("options") = encre::Options{}, py::arg("dithered_image_path") = nullptr, "Convert an image to the palette");
+            py::arg("options") = encre::Options{}, py::arg("preview_image_path") = static_cast<const char*>(nullptr), "Convert an image to the palette");
 }

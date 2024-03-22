@@ -169,8 +169,9 @@ def upload_file():
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
 
     options = {}
-    for name, type in [('rotation', str), ('contrast_coverage', float),
-                       ('contrast_compression', float), ('clipped_gamut_recovery', float)]:
+    for name, type in [('rotation', str), ('dynamic_range', float), ('exposure', float),
+                       ('brightness', float), ('contrast', float), ('sharpening', float),
+                       ('clipped_chroma_recovery', float)]:
         try:
             value = request.form.get(name, type=type)
             if value is not None:

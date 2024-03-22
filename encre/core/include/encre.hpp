@@ -68,14 +68,22 @@ namespace encre {
 
     struct Options {
         static constexpr Rotation default_rotation = Rotation::automatic;
-        static constexpr float default_contrast_coverage = 0.95f;
-        static constexpr float default_contrast_compression = 0.065f;
-        static constexpr float default_clipped_gamut_recovery = 0.5f;
+        static constexpr float default_dynamic_range = 0.95f;
+        static constexpr float default_contrast = 0.065f;
+        static constexpr std::nullopt_t automatic_exposure = std::nullopt;
+        static constexpr std::nullopt_t automatic_brightness = std::nullopt;
+        static constexpr float no_exposure_change = 1;
+        static constexpr float no_brightness_change = 0;
+        static constexpr float default_sharpening = 4;
+        static constexpr float default_clipped_chroma_recovery = 1.f;
 
         Rotation rotation = default_rotation;
-        float contrast_coverage = default_contrast_coverage;
-        float contrast_compression = default_contrast_compression;
-        float clipped_gamut_recovery = default_clipped_gamut_recovery;
+        float dynamic_range = default_dynamic_range;
+        std::optional<float> exposure = automatic_exposure;
+        std::optional<float> brightness = automatic_brightness;
+        float contrast = default_contrast;
+        float sharpening = default_sharpening;
+        float clipped_chroma_recovery = default_clipped_chroma_recovery;
     };
 
     // Using std::map to keep the name ordering consistent

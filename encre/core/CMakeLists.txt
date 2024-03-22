@@ -13,8 +13,8 @@ target_include_directories(encre PUBLIC "include")
 target_sources(encre PRIVATE
     "include/encre.hpp"
     "${export_header_path}"
-    "src/contrast.cpp"
-    "src/contrast.hpp"
+    "src/lightness.hpp"
+    "src/lightness.cpp"
     "src/dither.hpp"
     "src/dither.cpp"
     "src/encre.cpp"

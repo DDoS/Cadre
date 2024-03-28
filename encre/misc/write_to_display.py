@@ -34,7 +34,10 @@ def main():
     if arguments.status:
         print('Status: CONVERTING')
 
-    options = py_encre.Options(**json.loads(arguments.options))
+    if arguments.options:
+        options = py_encre.Options(**json.loads(arguments.options))
+    else:
+        options = py_encre.Options()
 
     preview_path: str = None
     if arguments.preview:

@@ -18,6 +18,17 @@ namespace {
 
         return object[name].cast<T>();
     }
+
+    template<typename T, typename S = T>
+    const auto read_option(const py::object& object, const char* name, T& storage) {
+        if (const auto value = try_get<float>(object, name))
+            storage = *value;
+    }
+
+    template<typename T>
+    const auto read_option(const py::object& object, const char* name, std::optional<T>& storage) {
+        read_option<std::optional<T>, T>(object, name, storage);
+    }
 }
 
 PYBIND11_MODULE(py_encre, m) {
@@ -50,7 +61,7 @@ PYBIND11_MODULE(py_encre, m) {
 
     py::class_<encre::Palette>(m, "Palette").
         def_readonly_static("default_target_luminance", &encre::Palette::default_target_luminance).
-        def_readwrite("elements", &encre::Palette::elements).
+        def_readwrite("gamut_vertices", &encre::Palette::gamut_vertices).
         def_readwrite("gamut_hull", &encre::Palette::gamut_hull).
         def_readwrite("gray_line", &encre::Palette::gray_line);
 
@@ -62,26 +73,34 @@ PYBIND11_MODULE(py_encre, m) {
         value("portrait_upside_down", encre::Rotation::portrait_upside_down);
 
     py::class_<encre::Options>(m, "Options").
-        def(py::init([](const py::kwargs& args) {
+        def(py::init([](const py::kwargs& arguments) {
             encre::Options options{};
-            if (const auto value = try_get<std::string>(args, "rotation"))
+            if (const auto value = try_get<std::string>(arguments, "rotation"))
                 options.rotation = encre::rotation_by_name.at(*value);
-            if (const auto value = try_get<float>(args, "contrast_coverage"))
-                options.contrast_coverage = *value;
-            if (const auto value = try_get<float>(args, "contrast_compression"))
-                options.contrast_compression = *value;
-            if (const auto value = try_get<float>(args, "clipped_gamut_recovery"))
-                options.clipped_gamut_recovery = *value;
+            read_option(arguments, "dynamic_range", options.dynamic_range);
+            read_option(arguments, "exposure", options.exposure);
+            read_option(arguments, "brightness", options.brightness);
+            read_option(arguments, "contrast", options.contrast);
+            read_option(arguments, "sharpening", options.sharpening);
+            read_option(arguments, "clipped_chroma_recovery", options.clipped_chroma_recovery);
             return options;
         })).
         def_readonly_static("default_rotation", &encre::Options::default_rotation).
-        def_readonly_static("default_contrast_coverage", &encre::Options::default_contrast_coverage).
-        def_readonly_static("default_contrast_compression", &encre::Options::default_contrast_compression).
-        def_readonly_static("default_clipped_gamut_recovery", &encre::Options::default_clipped_gamut_recovery).
+        def_readonly_static("default_dynamic_range", &encre::Options::default_dynamic_range).
+        def_readonly_static("automatic_brightness", &encre::Options::automatic_brightness).
+        def_readonly_static("automatic_exposure", &encre::Options::automatic_exposure).
+        def_readonly_static("no_exposure_change", &encre::Options::no_exposure_change).
+        def_readonly_static("no_brightness_change", &encre::Options::no_brightness_change).
+        def_readonly_static("default_contrast", &encre::Options::default_contrast).
+        def_readonly_static("default_sharpening", &encre::Options::default_sharpening).
+        def_readonly_static("default_clipped_chroma_recovery", &encre::Options::default_clipped_chroma_recovery).
         def_readwrite("rotation", &encre::Options::rotation).
-        def_readwrite("contrast_coverage", &encre::Options::contrast_coverage).
-        def_readwrite("contrast_compression", &encre::Options::contrast_compression).
-        def_readwrite("clipped_gamut_recovery", &encre::Options::clipped_gamut_recovery);
+        def_readwrite("dynamic_range", &encre::Options::dynamic_range).
+        def_readwrite("exposure", &encre::Options::exposure).
+        def_readwrite("brightness", &encre::Options::brightness).
+        def_readwrite("contrast", &encre::Options::contrast).
+        def_readwrite("sharpening", &encre::Options::sharpening).
+        def_readwrite("clipped_chroma_recovery", &encre::Options::clipped_chroma_recovery);
 
     m.attr("waveshare_7dot3_inch_e_paper_f_palette") = encre::waveshare_7dot3_inch_e_paper_f_palette;
 

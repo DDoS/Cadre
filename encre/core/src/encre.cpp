@@ -1,7 +1,7 @@
 #include "encre.hpp"
 
 #include "oklab.hpp"
-#include "contrast.hpp"
+#include "lightness.hpp"
 #include "dither.hpp"
 
 #include <vips/vips8>
@@ -99,12 +99,16 @@ namespace encre {
             const auto vertical_scale = static_cast<double>(height) / image.height();
             image = image.resize(std::min(horizontal_scale, vertical_scale));
 
-            image = limit_contrast(image, palette, options.contrast_coverage, options.contrast_compression);
+            image = adjust_lightness(image, palette, options.dynamic_range, options.exposure,
+                    options.brightness, options.contrast);
+
+            image = image.sharpen(vips::VImage::option()->set("y2", 5)->set("y3", 5)->
+                    set("m1", options.sharpening)->set("m2", options.sharpening));
 
             image = image.gravity(VipsCompassDirection::VIPS_COMPASS_DIRECTION_CENTRE, width, height,
                 vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));
 
-            dither(image, palette, options.clipped_gamut_recovery, output);
+            dither(image, palette, options.clipped_chroma_recovery, output);
 
             if (preview_image_path) {
                 // Undo rotation

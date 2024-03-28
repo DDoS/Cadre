@@ -1,0 +1,30 @@
+These instructions will install ImageMagick and libvips to a folder inside
+the repository itself, so they don't conflict with package manager installs.
+Use "PKG_CONFIG_PATH" to make them visible to their dependents.
+
+Install format dependencies:
+    libjpeg62-turbo-dev libexif-dev librsvg2-dev libpoppler-dev libtiff-dev liblcms2-dev
+    libpng-dev libhwy-dev liborc-0.4-dev libmatio-dev libcfitsio-dev libwebp-dev libraw-dev
+    libnifti-dev libopenexr-dev libopenjp2-7-dev libjxl-dev libopenslide-dev libheif-dev libzstd-dev
+    zlib1g-dev libbz2-dev libdjvulibre-dev liblzma-dev libjbig-dev libwmf-dev libpoppler-glib-dev
+
+This list of dependencies covers almost all supported image formats.
+Feel free to trim down to what actually want.
+
+Build latest ImageMagick 6
+    clone: https://github.com/ImageMagick/ImageMagick6.git
+    run: ./configure --with-modules --prefix="`pwd`/install"
+    run: make
+    run: make install
+    run: sudo ldconfig "`pwd`/ImageMagick6/install/lib"
+
+Build latest libvips
+    install: meson
+    clone: https://github.com/libvips/libvips.git
+    append to PKG_CONFIG_PATH: "<ImageMagick path>/install/lib/pkgconfig"
+    run: meson setup build --buildtype=release --prefix="`pwd`/install" --libdir lib
+    run: meson compile
+    run: meson install
+
+Before configuring Encre:
+    append to PKG_CONFIG_PATH: "<libvips path>/install/lib/pkgconfig"

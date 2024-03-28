@@ -69,7 +69,7 @@ namespace encre {
     struct Options {
         static constexpr Rotation default_rotation = Rotation::automatic;
         static constexpr float default_dynamic_range = 0.95f;
-        static constexpr float default_contrast = 0.065f;
+        static constexpr float default_contrast = 0.6f;
         static constexpr std::nullopt_t automatic_exposure = std::nullopt;
         static constexpr std::nullopt_t automatic_brightness = std::nullopt;
         static constexpr float no_exposure_change = 1;

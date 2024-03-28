@@ -34,25 +34,28 @@ namespace {
         const auto source_min_max = glm::vec2{percentile(histogram_data, histogram_total, outlier_threshold),
                 percentile(histogram_data, histogram_total, 1 - outlier_threshold)} - histogram_offset;
 
-        const auto target_range = target_min_max.y - target_min_max.x;
-        const auto range_overlap = std::max(0.f, std::min(source_min_max.y, target_min_max.y) - std::max(source_min_max.x, target_min_max.x));
-        auto overlap_percentage = range_overlap / target_range;
+        // Source dynamic range is not fully within the target: apply a scale and/or bias to move it inside.
+        if (source_min_max.x < target_min_max.x || source_min_max.y > target_min_max.y) {
+            const auto target_range = target_min_max.y - target_min_max.x;
+            const auto range_overlap = std::max(0.f, std::min(source_min_max.y, target_min_max.y) - std::max(source_min_max.x, target_min_max.x));
+            const auto overlap_percentage = range_overlap / target_range;
 
-        // Only do correction if there is less than 100% overlap of the source and target dynamic ranges.
-        // Scale the strength of the corrections by the inverse of the overlap percentage.
-        if (overlap_percentage < 1) {
-            if (!exposure) {
-                // Stretch the histogram to better fit the source range inside the target, but don't grow or shrink by more than 25%.
-                const auto source_range = source_min_max.y - source_min_max.x;
-                exposure = glm::mix(std::clamp(target_range / source_range, 0.75f, 1.25f),
-                        encre::Options::no_exposure_change, overlap_percentage);
-            }
-            if (!brightness) {
-                // Shift the histogram up or down towards the nearest target boundary
-                const auto shift_min_max = target_min_max - exposure.value() * source_min_max;
-                const auto absolute_shift = glm::abs(shift_min_max);
-                brightness = glm::mix(absolute_shift.x < absolute_shift.y ? shift_min_max.x : shift_min_max.y,
-                        encre::Options::no_brightness_change, overlap_percentage);
+            // Only do correction if there is less than 100% overlap of the source and target dynamic ranges.
+            // Scale the strength of the corrections by the inverse of the overlap percentage.
+            if (overlap_percentage < 1) {
+                if (!exposure) {
+                    // Stretch the histogram to better fit the source range inside the target, but don't grow or shrink by more than 25%.
+                    const auto source_range = source_min_max.y - source_min_max.x;
+                    exposure = glm::mix(std::clamp(target_range / source_range, 0.75f, 1.25f),
+                            encre::Options::no_exposure_change, overlap_percentage);
+                }
+                if (!brightness) {
+                    // Shift the histogram up or down towards the nearest target boundary
+                    const auto shift_min_max = target_min_max - exposure.value() * source_min_max;
+                    const auto absolute_shift = glm::abs(shift_min_max);
+                    brightness = glm::mix(absolute_shift.x < absolute_shift.y ? shift_min_max.x : shift_min_max.y,
+                            encre::Options::no_brightness_change, overlap_percentage);
+                }
             }
         }
 
@@ -77,7 +80,10 @@ namespace {
         // Sigmoid function to remap [-inf, inf] to [target_min, target_max]
         const auto target_range = target_min_max.y - target_min_max.x;
         const auto target_average = (target_min_max.x + target_min_max.y) / 2;
-        return target_range / (1 + (contrast * (target_average - lightness)).exp()) + target_min_max.x;
+        // The contrast is the slope at lightness == target_average
+        // See: https://stats.stackexchange.com/a/549554
+        const auto k = contrast * 4 / target_range;
+        return target_range / (1 + (k * (target_average - lightness)).exp()) + target_min_max.x;
     }
 }
 
@@ -86,7 +92,8 @@ namespace encre {
             const std::optional<float>& exposure, const std::optional<float>& brightness, float contrast) {
         auto lightness = in.extract_band(0);
 
-        const auto target_min_max = palette.gray_line * glm::vec2{dynamic_range, 2 - dynamic_range};
+        const auto target_min_max = glm::mix(glm::vec2{-100.f, 200.f}, palette.gray_line, dynamic_range);
+
         lightness = apply_exposure_and_brightness(lightness, target_min_max, exposure, brightness);
         lightness = tone_map(lightness, target_min_max, contrast);
 

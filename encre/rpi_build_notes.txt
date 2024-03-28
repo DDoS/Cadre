@@ -7,6 +7,10 @@ Increase size of swap:
 Install:
     git, git-lfs, clang, cmake, ninja-build, libvips-dev, python3-dev
 
+The package manager libvips should be good enough for most use cases.
+But if you want raw image support, you'll need to build it and ImageMagick
+from scratch; don't install "libvips-dev" and see "libvips_build_notes.txt".
+
 Add vcpkg environment variables to ~/.profile:
     export PATH="$PATH:$HOME/vcpkg"
     export VCPKG_ROOT="$HOME/vcpkg"

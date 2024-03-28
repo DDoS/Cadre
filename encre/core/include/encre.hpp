@@ -53,7 +53,7 @@ namespace encre {
     struct Palette {
         static constexpr float default_target_luminance = 80;
 
-        std::vector<Oklab> elements;
+        std::vector<Oklab> gamut_vertices;
         std::vector<Plane> gamut_hull;
         glm::vec2 gray_line;
     };

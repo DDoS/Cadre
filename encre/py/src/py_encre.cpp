@@ -61,7 +61,7 @@ PYBIND11_MODULE(py_encre, m) {
 
     py::class_<encre::Palette>(m, "Palette").
         def_readonly_static("default_target_luminance", &encre::Palette::default_target_luminance).
-        def_readwrite("elements", &encre::Palette::elements).
+        def_readwrite("gamut_vertices", &encre::Palette::gamut_vertices).
         def_readwrite("gamut_hull", &encre::Palette::gamut_hull).
         def_readwrite("gray_line", &encre::Palette::gray_line);
 

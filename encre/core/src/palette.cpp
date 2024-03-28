@@ -23,30 +23,31 @@ namespace encre {
     );
 
     Palette make_palette(std::span<const CIEXYZ> colors, float target_luminance) {
-        std::vector<Oklab> oklab_elements;
-        oklab_elements.reserve(colors.size());
+        std::vector<Oklab> gamut_vertices;
+        gamut_vertices.reserve(colors.size());
 
         for (const auto xyz : colors) {
-            oklab_elements.push_back(xyz_to_oklab(xyz));
+            gamut_vertices.push_back(xyz_to_oklab(xyz));
         }
 
-        const auto max_l = std::max_element(oklab_elements.begin(), oklab_elements.end(),
+        const auto gamut_vertex_count = gamut_vertices.size();
+
+        const auto max_l = std::max_element(gamut_vertices.begin(), gamut_vertices.end(),
             [](const auto& a, const auto& b) { return a.x < b.x; })->x;
         const auto l_scale = target_luminance / max_l;
-        for (auto& lab : oklab_elements) {
+        for (auto& lab : gamut_vertices) {
             lab.x *= l_scale;
         }
 
-        std::vector<double> points;
-        const auto point_count = oklab_elements.size();
-        points.reserve(point_count * 3);
-        for (const auto lab : oklab_elements) {
-            points.push_back(lab.x);
-            points.push_back(lab.y);
-            points.push_back(lab.z);
+        std::vector<double> gamut_vertices_qhull;
+        gamut_vertices_qhull.reserve(gamut_vertex_count * 3);
+        for (const auto lab : gamut_vertices) {
+            gamut_vertices_qhull.push_back(lab.x);
+            gamut_vertices_qhull.push_back(lab.y);
+            gamut_vertices_qhull.push_back(lab.z);
         }
 
-        const auto hull = orgQhull::Qhull("", 3, static_cast<int>(point_count), points.data(), "");
+        const auto hull = orgQhull::Qhull("", 3, static_cast<int>(gamut_vertex_count), gamut_vertices_qhull.data(), "");
 
         std::vector<Plane> gamut_planes;
         gamut_planes.reserve(hull.facetCount());
@@ -70,18 +71,18 @@ namespace encre {
             }
         }
 
-        return {std::move(oklab_elements), std::move(gamut_planes), {min_gray_l, max_gray_l}};
+        return {std::move(gamut_vertices), std::move(gamut_planes), {min_gray_l, max_gray_l}};
     }
 
-    Palette make_palette(std::span<const CIELab> colors, float target_luminance) {
-        std::vector<CIEXYZ> xyz_elements;
-        xyz_elements.reserve(colors.size());
+    Palette make_palette(std::span<const CIELab> lab_colors, float target_luminance) {
+        std::vector<CIEXYZ> xyz_colors;
+        xyz_colors.reserve(lab_colors.size());
 
-        for (const auto lab : colors) {
-            auto& xyz = xyz_elements.emplace_back();
+        for (const auto lab : lab_colors) {
+            auto& xyz = xyz_colors.emplace_back();
             vips_col_Lab2XYZ(lab.x, lab.y, lab.z, &xyz.x, &xyz.y, &xyz.z);
         }
 
-        return make_palette(xyz_elements, target_luminance);
+        return make_palette(xyz_colors, target_luminance);
     }
 }

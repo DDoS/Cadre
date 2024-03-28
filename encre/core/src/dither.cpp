@@ -102,8 +102,8 @@ namespace {
     uint8_t closest_palette_color(const encre::Palette& palette, const glm::vec3& lab) {
         auto closest_distance_square = std::numeric_limits<float>::max();
         int closest_index = -1;
-        for (int i = 0; i < palette.elements.size(); i++) {
-            const auto distance_square = glm::distance2(lab, palette.elements[i]);
+        for (int i = 0; i < palette.gamut_vertices.size(); i++) {
+            const auto distance_square = glm::distance2(lab, palette.gamut_vertices[i]);
             if (distance_square < closest_distance_square) {
                 closest_distance_square = distance_square;
                 closest_index = i;
@@ -154,7 +154,7 @@ namespace {
 
                 const auto old_pixel = glm::make_vec3(p + ix);
                 const auto new_index = closest_palette_color(palette, old_pixel);
-                const auto new_pixel = static_cast<glm::vec3>(palette.elements[new_index]);
+                const auto new_pixel = static_cast<glm::vec3>(palette.gamut_vertices[new_index]);
 
                 q[x] = new_index;
                 std::memcpy(p + ix, glm::value_ptr(new_pixel), sizeof(new_pixel));

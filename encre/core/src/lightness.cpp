@@ -4,6 +4,8 @@
 
 #include <vips/vips8>
 
+#include <algorithm>
+
 namespace {
     int percentile(std::span<const uint32_t> histogram, uint32_t total_sum, double percent) {
         const auto percentile_sum = percent * total_sum;

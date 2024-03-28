@@ -9,6 +9,7 @@
 #include <vector>
 #include <span>
 #include <map>
+#include <optional>
 
 namespace encre {
     struct XYZ : glm::vec3 {

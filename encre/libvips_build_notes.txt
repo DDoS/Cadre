@@ -28,3 +28,6 @@ Build latest libvips
 
 Before configuring Encre:
     append to PKG_CONFIG_PATH: "<libvips path>/install/lib/pkgconfig"
+
+Before running Expo:
+    append to LD_LIBRARY_PATH: "<libvips path>libvips/install/lib"

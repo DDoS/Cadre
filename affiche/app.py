@@ -1,40 +1,60 @@
-from pathlib import Path
+import signal
 import subprocess
-from enum import Enum
 import json
 import random
 import threading
 import traceback
+from enum import Enum
+from pathlib import Path, PurePosixPath
 from logging.config import dictConfig
+from urllib.parse import unquote, urlsplit
+from urllib.request import urlopen, urlretrieve
 
 from flask import Flask, request, redirect, send_file, url_for
 from werkzeug.utils import secure_filename
 
+
+# Make sure we can shutdown using SIGINT
+if signal.getsignal(signal.SIGINT) == signal.SIG_IGN:
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
 SERVER_PATH = Path(__file__).parent
-TEMP_PATH = SERVER_PATH / 'temp'
-TEMP_PATH.mkdir(exist_ok=True)
 
 dictConfig({
     'version': 1,
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        }
+    },
     'handlers': {
         'file.handler': {
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': str(TEMP_PATH / 'app.log'),
-            'maxBytes': 10_000_000,
+            'filename': str(SERVER_PATH / 'app.log'),
+            'maxBytes': 1_000_000,
             'backupCount': 2,
             'level': 'DEBUG',
-        },
+            'formatter': 'standard'
+        }
     },
     'loggers': {
-        'werkzeug': {
+        __name__: {
             'level': 'DEBUG',
-            'handlers': ['file.handler'],
+            'handlers': ['file.handler']
         },
+        'werkzeug': {
+            'level': 'WARNING',
+            'handlers': ['file.handler']
+        }
     },
 })
 
 def delete_all_files(directory: Path):
     [file.unlink() for file in directory.iterdir() if file.is_file()]
+
+TEMP_PATH = SERVER_PATH / 'temp'
+TEMP_PATH.mkdir(exist_ok=True)
 
 UPLOAD_PATH = TEMP_PATH / 'upload'
 UPLOAD_PATH.mkdir(exist_ok=True)
@@ -102,7 +122,7 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path, op
                     status_string = output_line.split()[-1]
                     try:
                         display_writer_last_sub_status = DisplayWriterSubStatus[status_string]
-                    except:
+                    except Exception:
                         pass
 
                 if display_writer_last_sub_status == DisplayWriterSubStatus.DISPLAYING:
@@ -133,6 +153,23 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path, op
         return False
 
 
+def file_name_from_url(url: str, fallback: str) -> str:
+    file_path: None | PurePosixPath = None
+    with urlopen(url) as response:
+        if filename := response.headers.get_filename():
+            file_path = PurePosixPath(filename)
+
+    if not file_path:
+        url_path = PurePosixPath(unquote(urlsplit(url).path))
+        if url_path.suffix:
+            file_path = url_path
+
+    if not file_path:
+        file_path = PurePosixPath(fallback)
+
+    return file_path.name
+
+
 def random_string() -> str:
     return '%030x' % random.randrange(16**30)
 
@@ -151,7 +188,8 @@ def upload_file():
         return app.send_static_file('index.html')
 
     file = request.files.get('file')
-    if not file:
+    url = request.form.get('url', type=str)
+    if not file and not url:
         return redirect(request.url)
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
@@ -159,14 +197,22 @@ def upload_file():
 
     job_id = random_string()
 
-    exec_path: Path = app.config['DISPLAY_WRITER_PATH']
-
-    file_name = Path(secure_filename(file.filename))
-    file_name = file_name.with_stem(f'{file_name.stem}_{job_id}')
-    file_path = app.config['UPLOAD_PATH'] / file_name
-    file.save(file_path)
-
-    preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
+    if file:
+        file_name = Path(secure_filename(file.filename))
+        app.logger.info(f'Received image {file_name}')
+        file_name = file_name.with_stem(f'{file_name.stem}_{job_id}')
+        file_path = app.config['UPLOAD_PATH'] / file_name
+        file.save(file_path)
+    else:
+        try:
+            file_name = Path(file_name_from_url(url, 'url_image'))
+            app.logger.info(f'Received image {file_name}')
+            file_name.with_stem(f'{file_name.stem}_{job_id}')
+            file_path = app.config['UPLOAD_PATH'] / file_name
+            urlretrieve(url, file_path)
+        except Exception:
+            app.logger.debug(f'Failed to download image from "{url}" to "{file_path}"')
+            return 'Failed to retrieve the file from the URL', 400
 
     options = {}
     for name, type in [('rotation', str), ('dynamic_range', float), ('exposure', float),
@@ -179,6 +225,8 @@ def upload_file():
         except ValueError:
             pass
 
+    exec_path: Path = app.config['DISPLAY_WRITER_PATH']
+    preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
     if not run_display_writer(exec_path, file_path, preview_path, options):
         return redirect(request.url)
 

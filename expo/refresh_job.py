@@ -161,7 +161,7 @@ def _create_refresh_job(db: sqlite3.Connection, id: int | None, identifier: str,
     }
     with db:
         id, = db.execute('INSERT INTO refresh_jobs VALUES(:id, :identifier, :display_name, :hostname, :schedule, :enabled, :filter) '
-                         'ON CONFLICT(id) DO UPDATE SET identifier = :identifier, display_name = :display_name, hostname = :hostname'
+                         'ON CONFLICT(id) DO UPDATE SET identifier = :identifier, display_name = :display_name, hostname = :hostname, '
                          'schedule = :schedule, enabled = :enabled, filter = :filter RETURNING id', row).fetchone()
 
     job._set_id(id)

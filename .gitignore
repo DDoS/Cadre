@@ -5,4 +5,5 @@ __pycache__/
 temp/
 
 *.log
+*.log.[0-9]
 *.out

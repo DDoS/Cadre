@@ -1,0 +1,6 @@
+flask
+croniter
+APScheduler
+requests
+pyvips
+marshmallow

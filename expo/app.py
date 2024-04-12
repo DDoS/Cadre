@@ -74,7 +74,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def root():
-    return 'Expo JSON API', 200
+    return 'Expo', 200
 
 
 @app.route('/refresh', methods=['POST'])

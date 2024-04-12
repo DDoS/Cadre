@@ -78,7 +78,7 @@ Create a Python virtual environment, and install the [requirements](expo/require
 Start the server using `start.sh`. Use `stop.sh` if you need to stop the server when it's running in the background.
 
 The server should be available at the host's LAN address on port `21110`.
-You can run Expo on the same host as Affiche, or a different one.
+You can run Expo on the same host as Affiche or a different one.
 
 So far Expo only supports local filesystem collections. You can run the service on your photo NAS,
 or on a Raspberry Pi with an SMB share where you can copy your favorite photos.
@@ -87,7 +87,7 @@ If you need raw photo format support, checkout [Cru](expo/cru).
 ### Collections
 
 List all collections by `GET`ing from `/collections`.
-Create a collection by `PUT`ting to `/collections` a JSON body like so:
+Create a collection by `PUT`ting to `/collections` a JSON object like so:
 ```json
 {
     "identifier": "my_collection",
@@ -157,3 +157,15 @@ In simple terms this means you can use the `favorite` (unused), `landscape`, `po
 predicates to write a logical expression for filtering photos. You can use the `()`, `not`, `and`, and `or`
 operators to build your expression (listed in decreasing order of precedence). The `true` and `false`
 literals are also available: if you simply want to allow all photos use `true`.
+
+### Refresh
+
+Immediately trigger a schedule by `POST`ing to `/refresh` a JSON object like so:
+```json
+{
+    "identifier": "<schedule identifier>",
+    "delay": 0
+}
+```
+- `identifier` is a schedule identifier
+- `delay` a delay in seconds (float), is optional and defaults to `0`

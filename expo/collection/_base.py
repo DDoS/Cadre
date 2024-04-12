@@ -287,7 +287,7 @@ def _start_process(message_queue: mp.Queue, photo_db_path: Path, id: int, identi
                 'filename': str(Path(__file__).parent / f'{CollectionProcessClass.__name__}_{identifier}.log'),
                 'maxBytes': 1_000_000,
                 'backupCount': 2,
-                'level': 'DEBUG',
+                'level': 'INFO',
                 'formatter': 'standard'
             },
         },

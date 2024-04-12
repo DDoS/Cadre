@@ -68,6 +68,8 @@ DISPLAY_WRITER_PATH = SERVER_PATH.parent / 'encre/misc/write_to_display.py'
 if not DISPLAY_WRITER_PATH.is_file():
     raise Exception(f'File not found: "{DISPLAY_WRITER_PATH}"')
 
+DISPLAY_PALETTE = 'inky_7_color_palette'
+
 
 DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
 DisplayWriterSubStatus = Enum('DisplayWriterSubStatus', ['NONE', 'LAUNCHING', 'CONVERTING', 'DISPLAYING'])
@@ -98,7 +100,8 @@ def update_display_writer_preview(preview_path: Path):
         if preview_path is not None:
             preview_path.unlink(missing_ok=True)
 
-def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path, options: dict[str]) -> bool:
+def run_display_writer(exec_path: Path, image_path: Path, display_palette: str,
+                       preview_path: Path, options: dict[str]) -> bool:
     global display_writer_last_status
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
@@ -110,7 +113,7 @@ def run_display_writer(exec_path: Path, image_path: Path, preview_path: Path, op
 
         try:
             options_string = json.dumps(options)
-            process = subprocess.Popen(['python3', '-u', exec_path, image_path,
+            process = subprocess.Popen(['python3', '-u', exec_path, image_path, '--palette', display_palette,
                                         '--preview', preview_path, '--options', options_string, '--status'],
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
@@ -178,6 +181,7 @@ app = Flask(__name__)
 app.config['UPLOAD_PATH'] = UPLOAD_PATH
 app.config['PREVIEW_PATH'] = PREVIEW_PATH
 app.config['DISPLAY_WRITER_PATH'] = DISPLAY_WRITER_PATH
+app.config['DISPLAY_PALETTE'] = DISPLAY_PALETTE
 app.secret_key = random_string()
 
 @app.route('/', methods=['GET', 'POST'])
@@ -217,7 +221,7 @@ def upload_file():
     options = {}
     for name, type in [('rotation', str), ('dynamic_range', float), ('exposure', float),
                        ('brightness', float), ('contrast', float), ('sharpening', float),
-                       ('clipped_chroma_recovery', float)]:
+                       ('clipped_chroma_recovery', float), ('error_attenuation', float)]:
         try:
             value = request.form.get(name, type=type)
             if value is not None:
@@ -226,8 +230,9 @@ def upload_file():
             pass
 
     exec_path: Path = app.config['DISPLAY_WRITER_PATH']
+    display_palette: str = app.config['DISPLAY_PALETTE']
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
-    if not run_display_writer(exec_path, file_path, preview_path, options):
+    if not run_display_writer(exec_path, file_path, display_palette, preview_path, options):
         return redirect(request.url)
 
     return redirect(request.url)

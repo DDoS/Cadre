@@ -8,9 +8,12 @@
 
 #include <vips/vips8>
 
+#ifdef PRINT_HULL
+#include <iostream>
+#endif
+
 namespace encre {
-    // From Waveshare 7.3inch e-Paper (F) datasheet section 8-1
-    const Palette waveshare_7dot3_inch_e_paper_f_palette = make_palette(
+    const Palette waveshare_7_color_palette = make_palette(
         std::to_array<CIELab>({
             {17.6f, 8.3f, -8.9f},
             {70.6f, -0.4f, 2.4f},
@@ -21,6 +24,24 @@ namespace encre {
             {44.4f, 24.9f, 30.0f}, // Orange "a" and "b" were swapped?
         })
     );
+
+    const Palette inky_7_color_palette = make_palette(
+        std::to_array<CIELab>({
+            {17.68f, 5.08f, -8.48f},
+            {73.65f, -1.01f, 2.65f},
+            {46.47f, -31.94f, 16.43f},
+            {27.32f, 8.84f, -34.38f},
+            {48.02f, 35.9f, 17.4f},
+            {69.38f, -4.95f, 56.42f},
+            {56.04f, 24.9f, 30.0f},
+        })
+    );
+
+    // Using std::map to keep the name ordering consistent
+    const std::map<std::string, const Palette*> palette_by_name{
+        {"waveshare_7_color_palette", &waveshare_7_color_palette},
+        {"inky_7_color_palette", &inky_7_color_palette},
+    };
 
     Palette make_palette(std::span<const CIEXYZ> colors, float target_luminance) {
         std::vector<Oklab> gamut_vertices;
@@ -47,7 +68,12 @@ namespace encre {
             gamut_vertices_qhull.push_back(lab.z);
         }
 
-        const auto hull = orgQhull::Qhull("", 3, static_cast<int>(gamut_vertex_count), gamut_vertices_qhull.data(), "");
+        const auto hull = orgQhull::Qhull("", 3, static_cast<int>(gamut_vertex_count), gamut_vertices_qhull.data(), "Qt");
+
+        #ifdef PRINT_HULL
+        std::cout << "const int palette_hull_facet_count = " << hull.facetCount() << ";\n";
+        std::cout << "const vec4[palette_hull_facet_count] palette_hull = vec4[palette_hull_facet_count](\n";
+        #endif
 
         std::vector<Plane> gamut_planes;
         gamut_planes.reserve(hull.facetCount());
@@ -59,6 +85,15 @@ namespace encre {
                 static_cast<float>(coordinates[1]),
                 static_cast<float>(coordinates[2]),
                 static_cast<float>(plane.offset())});
+
+            #ifdef PRINT_HULL
+            std::cout << "    vec4(" << coordinates[0] << ", " << coordinates[1] << ", " <<
+                    coordinates[2] << ", " << plane.offset() / 100 << ")";
+            if (gamut_planes.size() < hull.facetCount()) {
+                std::cout << ",";
+            }
+            std::cout << "\n";
+            #endif
         }
 
         auto max_gray_l = std::numeric_limits<float>::max(), min_gray_l = std::numeric_limits<float>::min();
@@ -70,6 +105,11 @@ namespace encre {
                 max_gray_l = std::min(max_gray_l, l);
             }
         }
+
+        #ifdef PRINT_HULL
+        std::cout << ");\n";
+        std::cout << "const vec2 gray_line = vec2(" << min_gray_l / 100 << ", " << max_gray_l / 100 << ");\n\n";
+        #endif
 
         return {std::move(gamut_vertices), std::move(gamut_planes), {min_gray_l, max_gray_l}};
     }

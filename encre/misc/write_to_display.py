@@ -20,6 +20,8 @@ def main():
     parser.add_argument('--preview', metavar='path', type=Path, required=False, default=None,
                         help='Optional preview image output')
     parser.add_argument('--status', action='store_true', help='Print status')
+    parser.add_argument('--palette', metavar='name', type=str, required=False,
+                        default='waveshare_7_color_palette', help='Display palette name')
     parser.add_argument('--options', metavar='json', type=str, required=False, default={},
                         help='Options as a JSON encoded string')
     arguments = parser.parse_args()
@@ -34,6 +36,8 @@ def main():
     if arguments.status:
         print('Status: CONVERTING')
 
+    palette = py_encre.palette_by_name[arguments.palette]
+
     if arguments.options:
         options = py_encre.Options(**json.loads(arguments.options))
     else:
@@ -43,8 +47,8 @@ def main():
     if arguments.preview:
         preview_path = str(arguments.preview)
 
-    if not py_encre.convert(str(arguments.image_path), py_encre.waveshare_7dot3_inch_e_paper_f_palette,
-                            image, options=options, preview_image_path=preview_path):
+    if not py_encre.convert(str(arguments.image_path), palette, image,
+                            options=options, preview_image_path=preview_path):
         print('Conversion failed')
         sys.exit(1)
 

@@ -24,6 +24,10 @@ namespace {
 
     // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent
     glm::vec3 compute_gamut_clamp_target(const encre::Palette& palette, float alpha, float l, float chroma) {
+        if (alpha < epsilon) {
+            return {glm::clamp(l, palette.gray_line.x, palette.gray_line.y), 0, 0};
+        }
+
         const auto range = palette.gray_line.y - palette.gray_line.x;
 
         const auto l_start = (l - palette.gray_line.x) / range;
@@ -38,7 +42,7 @@ namespace {
         const auto chroma = glm::length(glm::yz(lab));
         const auto alpha = clipped_chroma_recovery;
         const auto min_max_gray = palette.gray_line + glm::vec2(epsilon, -epsilon);
-        if (chroma < epsilon || alpha < epsilon && (lab.x < min_max_gray.x || lab.x > min_max_gray.y)) {
+        if (chroma < epsilon) {
             return {glm::clamp(lab.x, palette.gray_line.x, palette.gray_line.y), 0, 0};
         }
 
@@ -99,7 +103,7 @@ namespace {
         }
     }
 
-    uint8_t closest_palette_color(const encre::Palette& palette, const glm::vec3& lab) {
+    std::pair<uint8_t, float> closest_palette_color(const encre::Palette& palette, const glm::vec3& lab) {
         auto closest_distance_square = std::numeric_limits<float>::max();
         int closest_index = -1;
         for (int i = 0; i < palette.gamut_vertices.size(); i++) {
@@ -110,38 +114,41 @@ namespace {
             }
         }
 
-        return static_cast<uint8_t>(closest_index);
+        return {static_cast<uint8_t>(closest_index), glm::sqrt(closest_distance_square)};
     }
 
-    void diffuse_dither_error_fs(const VipsRect& rectangle, const glm::ivec3& position, const glm::vec3& error,
+    void diffuse_dither_error_fs(const VipsRect& rectangle, const glm::ivec3& position, const glm::vec3& delta,
             float* p, float* p_down) {
         if (position.x + 1 < rectangle.width) {
             const auto ix_right = position.z + 3;
-            const auto right_pixel = glm::make_vec3(p + ix_right) + error * (7.f / 16);
+            const auto right_pixel = glm::make_vec3(p + ix_right) + delta * (7.f / 16);
             std::memcpy(p + ix_right, glm::value_ptr(right_pixel), sizeof(right_pixel));
         }
 
         if (position.y + 1 < rectangle.height) {
             if (position.x >= 1) {
                 const auto ix_left = position.z - 3;
-                const auto down_left_pixel = glm::make_vec3(p_down + ix_left) + error * (3.f / 16);
+                const auto down_left_pixel = glm::make_vec3(p_down + ix_left) + delta * (3.f / 16);
                 std::memcpy(p_down + ix_left, glm::value_ptr(down_left_pixel), sizeof(down_left_pixel));
             }
 
             {
-                const auto down_pixel = glm::make_vec3(p_down + position.z) + error * (5.f / 16);
+                const auto down_pixel = glm::make_vec3(p_down + position.z) + delta * (5.f / 16);
                 std::memcpy(p_down + position.z, glm::value_ptr(down_pixel), sizeof(down_pixel));
             }
 
             if (position.x + 1 < rectangle.width) {
                 const auto ix_right = position.z + 3;
-                const auto down_right_pixel = glm::make_vec3(p_down + ix_right) + error * (1.f / 16);
+                const auto down_right_pixel = glm::make_vec3(p_down + ix_right) + delta * (1.f / 16);
                 std::memcpy(p_down + ix_right, glm::value_ptr(down_right_pixel), sizeof(down_right_pixel));
             }
         }
     }
 
-    void dither_batch(const encre::Palette& palette, const vips::VRegion& in_region, const vips::VRegion& out_region) {
+    void dither_batch(const encre::Palette& palette, float error_attenuation, const vips::VRegion& in_region,
+            const vips::VRegion& out_region) {
+        error_attenuation *= 0.01f;
+
         const auto in_rectangle = in_region.valid();
         const auto out_rectangle = out_region.valid();
 
@@ -153,21 +160,27 @@ namespace {
                 const int ix = x * 3;
 
                 const auto old_pixel = glm::make_vec3(p + ix);
-                const auto new_index = closest_palette_color(palette, old_pixel);
+                const auto [new_index, error] = closest_palette_color(palette, old_pixel);
+                #ifndef NDEBUG
+                if (new_index >= palette.gamut_vertices.size()) {
+                    __builtin_debugtrap();
+                }
+                #endif
                 const auto new_pixel = static_cast<glm::vec3>(palette.gamut_vertices[new_index]);
 
                 q[x] = new_index;
                 std::memcpy(p + ix, glm::value_ptr(new_pixel), sizeof(new_pixel));
 
-                const auto error = old_pixel - new_pixel;
-                diffuse_dither_error_fs(in_rectangle, {x, y, ix}, error, p, p_down);
+                const auto delta = (old_pixel - new_pixel) * glm::exp(-error_attenuation * error);
+                diffuse_dither_error_fs(in_rectangle, {x, y, ix}, delta, p, p_down);
             }
         }
     }
 }
 
 namespace encre {
-    void dither(vips::VImage& in, const Palette& palette, float clipped_chroma_recovery, std::span<uint8_t> result) {
+    void dither(vips::VImage& in, const Palette& palette, float clipped_chroma_recovery, float error_attenuation,
+            std::span<uint8_t> result) {
         if (vips_check_uncoded("dither", in.get_image()) ||
                 vips_check_bands("dither", in.get_image(), 3) ||
                 vips_check_format("dither", in.get_image(), VIPS_FORMAT_FLOAT)) {
@@ -192,7 +205,7 @@ namespace encre {
         for (int y = 0; y < height; y++) {
             in_region.prepare(0, y, width, 2);
             out_region.prepare(0, y, width, 1);
-            dither_batch(palette, in_region, out_region);
+            dither_batch(palette, error_attenuation, in_region, out_region);
         }
     }
 }

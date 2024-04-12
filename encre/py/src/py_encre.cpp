@@ -72,6 +72,8 @@ PYBIND11_MODULE(py_encre, m) {
         value("landscape_upside_down", encre::Rotation::landscape_upside_down).
         value("portrait_upside_down", encre::Rotation::portrait_upside_down);
 
+    m.attr("rotation_by_name") = encre::rotation_by_name;
+
     py::class_<encre::Options>(m, "Options").
         def(py::init([](const py::kwargs& arguments) {
             encre::Options options{};
@@ -83,6 +85,7 @@ PYBIND11_MODULE(py_encre, m) {
             read_option(arguments, "contrast", options.contrast);
             read_option(arguments, "sharpening", options.sharpening);
             read_option(arguments, "clipped_chroma_recovery", options.clipped_chroma_recovery);
+            read_option(arguments, "error_attenuation", options.error_attenuation);
             return options;
         })).
         def_readonly_static("default_rotation", &encre::Options::default_rotation).
@@ -94,15 +97,20 @@ PYBIND11_MODULE(py_encre, m) {
         def_readonly_static("default_contrast", &encre::Options::default_contrast).
         def_readonly_static("default_sharpening", &encre::Options::default_sharpening).
         def_readonly_static("default_clipped_chroma_recovery", &encre::Options::default_clipped_chroma_recovery).
+        def_readonly_static("default_error_attenuation", &encre::Options::default_error_attenuation).
         def_readwrite("rotation", &encre::Options::rotation).
         def_readwrite("dynamic_range", &encre::Options::dynamic_range).
         def_readwrite("exposure", &encre::Options::exposure).
         def_readwrite("brightness", &encre::Options::brightness).
         def_readwrite("contrast", &encre::Options::contrast).
         def_readwrite("sharpening", &encre::Options::sharpening).
-        def_readwrite("clipped_chroma_recovery", &encre::Options::clipped_chroma_recovery);
+        def_readwrite("clipped_chroma_recovery", &encre::Options::clipped_chroma_recovery).
+        def_readwrite("error_attenuation", &encre::Options::error_attenuation);
 
-    m.attr("waveshare_7dot3_inch_e_paper_f_palette") = encre::waveshare_7dot3_inch_e_paper_f_palette;
+    m.attr("waveshare_7_color_palette") = encre::waveshare_7_color_palette;
+    m.attr("inky_7_color_palette") = encre::inky_7_color_palette;
+
+    m.attr("palette_by_name") = encre::palette_by_name;
 
     m.def("initialize", &encre::initialize, py::arg("executable_path"), "Initialize the runtime");
     m.def("uninitalize", &encre::uninitalize, "Un-initialize the runtime");

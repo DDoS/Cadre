@@ -7,5 +7,6 @@ namespace vips {
 }
 
 namespace encre {
-    void dither(vips::VImage& in, const Palette& palette, float clipped_chroma_recovery, std::span<uint8_t> result);
+    void dither(vips::VImage& in, const Palette& palette, float clipped_chroma_recovery, float error_attenuation,
+            std::span<uint8_t> result);
 }

@@ -108,7 +108,7 @@ namespace encre {
             image = image.gravity(VipsCompassDirection::VIPS_COMPASS_DIRECTION_CENTRE, width, height,
                 vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));
 
-            dither(image, palette, options.clipped_chroma_recovery, output);
+            dither(image, palette, options.clipped_chroma_recovery, options.error_attenuation, output);
 
             if (preview_image_path) {
                 // Undo rotation

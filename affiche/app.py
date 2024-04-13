@@ -1,3 +1,4 @@
+import logging
 import signal
 import subprocess
 import json
@@ -17,6 +18,9 @@ from werkzeug.utils import secure_filename
 # Make sure we can shutdown using SIGINT
 if signal.getsignal(signal.SIGINT) == signal.SIG_IGN:
     signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
+affiche_logger = logging.getLogger('affiche')
 
 
 SERVER_PATH = Path(__file__).parent
@@ -43,32 +47,43 @@ dictConfig({
             'level': 'DEBUG',
             'handlers': ['file.handler']
         },
+        'affiche': {
+            'level': 'DEBUG',
+            'handlers': ['file.handler']
+        },
         'werkzeug': {
             'level': 'INFO',
             'handlers': ['file.handler']
         }
-    },
+    }
 })
 
-def delete_all_files(directory: Path):
-    [file.unlink() for file in directory.iterdir() if file.is_file()]
 
-TEMP_PATH = SERVER_PATH / 'temp'
-TEMP_PATH.mkdir(exist_ok=True)
+def setup_app_config(app: Flask):
+    app.config.from_file("default_config.json", load=json.load)
+    app.config.from_file("config.json", load=json.load, silent=True)
 
-UPLOAD_PATH = TEMP_PATH / 'upload'
-UPLOAD_PATH.mkdir(exist_ok=True)
-delete_all_files(UPLOAD_PATH)
+    def delete_all_files(directory: Path):
+        [file.unlink() for file in directory.iterdir() if file.is_file()]
 
-PREVIEW_PATH = TEMP_PATH / 'preview'
-PREVIEW_PATH.mkdir(exist_ok=True)
-delete_all_files(PREVIEW_PATH)
+    temp_path: Path = SERVER_PATH / app.config['TEMP_PATH']
+    temp_path.mkdir(exist_ok=True)
+    app.config['TEMP_PATH'] = temp_path
 
-DISPLAY_WRITER_PATH = SERVER_PATH.parent / 'encre/misc/write_to_display.py'
-if not DISPLAY_WRITER_PATH.is_file():
-    raise Exception(f'File not found: "{DISPLAY_WRITER_PATH}"')
+    upload_path = temp_path / 'upload'
+    upload_path.mkdir(exist_ok=True)
+    delete_all_files(upload_path)
+    app.config['UPLOAD_PATH'] = upload_path
 
-DISPLAY_PALETTE = 'inky_7_color_palette'
+    preview_path = temp_path / 'preview'
+    preview_path.mkdir(exist_ok=True)
+    delete_all_files(preview_path)
+    app.config['PREVIEW_PATH'] = preview_path
+
+    display_writer_path: Path = SERVER_PATH / app.config['DISPLAY_WRITER_PATH']
+    if not display_writer_path.is_file():
+        raise Exception(f'Display writer executable not found: "{display_writer_path}"')
+    app.config['DISPLAY_WRITER_PATH'] = display_writer_path
 
 
 DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
@@ -96,7 +111,7 @@ def update_display_writer_preview(preview_path: Path):
 
             display_writer_last_preview = preview_path
     except Exception:
-        traceback.print_exc()
+        affiche_logger.exception('Failed to update preview')
         if preview_path is not None:
             preview_path.unlink(missing_ok=True)
 
@@ -140,7 +155,7 @@ def run_display_writer(exec_path: Path, image_path: Path, display_palette: str,
             display_writer_last_sub_status = DisplayWriterSubStatus.NONE
         except Exception:
             display_writer_last_status = DisplayWriterStatus.FAILED
-            traceback.print_exc()
+            affiche_logger.exception('Failed to refresh display')
             process.kill()
         finally:
             display_writer_last_sub_status = DisplayWriterSubStatus.NONE
@@ -178,10 +193,7 @@ def random_string() -> str:
 
 
 app = Flask(__name__)
-app.config['UPLOAD_PATH'] = UPLOAD_PATH
-app.config['PREVIEW_PATH'] = PREVIEW_PATH
-app.config['DISPLAY_WRITER_PATH'] = DISPLAY_WRITER_PATH
-app.config['DISPLAY_PALETTE'] = DISPLAY_PALETTE
+setup_app_config(app)
 app.secret_key = random_string()
 
 @app.route('/', methods=['GET', 'POST'])
@@ -203,14 +215,14 @@ def upload_file():
 
     if file:
         file_name = Path(secure_filename(file.filename))
-        app.logger.info(f'Received image {file_name}')
+        app.logger.info(f'Received image "{file_name}"')
         file_name = file_name.with_stem(f'{file_name.stem}_{job_id}')
         file_path = app.config['UPLOAD_PATH'] / file_name
         file.save(file_path)
     else:
         try:
             file_name = Path(file_name_from_url(url, 'url_image'))
-            app.logger.info(f'Received image {file_name}')
+            app.logger.info(f'Received image "{file_name}"')
             file_name.with_stem(f'{file_name.stem}_{job_id}')
             file_path = app.config['UPLOAD_PATH'] / file_name
             urlretrieve(url, file_path)

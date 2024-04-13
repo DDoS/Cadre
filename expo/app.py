@@ -2,7 +2,6 @@ import signal
 import logging
 from pathlib import Path
 from logging.config import dictConfig
-from typing import Any
 
 from flask import Flask, request
 from marshmallow import Schema, fields, ValidationError

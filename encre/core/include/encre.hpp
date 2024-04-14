@@ -77,7 +77,7 @@ namespace encre {
         static constexpr float no_brightness_change = 0;
         static constexpr float default_sharpening = 4;
         static constexpr float default_clipped_chroma_recovery = 1.f;
-        static constexpr float default_error_attenuation = 0.25f;
+        static constexpr float default_error_attenuation = 0.2f;
 
         Rotation rotation = default_rotation;
         float dynamic_range = default_dynamic_range;

@@ -147,8 +147,6 @@ namespace {
 
     void dither_batch(const encre::Palette& palette, float error_attenuation, const vips::VRegion& in_region,
             const vips::VRegion& out_region) {
-        error_attenuation *= 0.01f;
-
         const auto in_rectangle = in_region.valid();
         const auto out_rectangle = out_region.valid();
 
@@ -171,7 +169,8 @@ namespace {
                 q[x] = new_index;
                 std::memcpy(p + ix, glm::value_ptr(new_pixel), sizeof(new_pixel));
 
-                const auto delta = (old_pixel - new_pixel) * glm::exp(-error_attenuation * error);
+                const auto scale = 1 / (1 + glm::exp(error_attenuation * error - (1 / error_attenuation) - 4));
+                const auto delta = (old_pixel - new_pixel) * scale;
                 diffuse_dither_error_fs(in_rectangle, {x, y, ix}, delta, p, p_down);
             }
         }

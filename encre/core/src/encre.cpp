@@ -47,7 +47,7 @@ namespace encre {
         vips::VImage image;
         std::exception vips_load_error;
         try {
-            image = vips::VImage::new_from_file(image_path, vips::VImage::option()->set("autorotate", true));
+            image = vips::VImage::new_from_file(image_path);
         } catch (const std::exception& error) {
             vips_load_error = error;
         }
@@ -73,6 +73,8 @@ namespace encre {
             if (image.has_alpha()) {
                 image = image.flatten(vips::VImage::option()->set("background", fill_color));
             }
+
+            image = image.autorot();
 
             auto computed_rotation = options.rotation;
             if (computed_rotation == Rotation::automatic && image.height() > image.width()) {

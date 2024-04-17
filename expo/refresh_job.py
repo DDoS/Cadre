@@ -36,6 +36,7 @@ class RefreshJob:
         self._trigger = CronTrigger.from_crontab(self._schedule)
         self._enabled = enabled
         self._filter = filter if isinstance(filter, Filter) else parse_filter(filter)
+        self._job = None
 
 
     @property
@@ -93,7 +94,8 @@ class RefreshJob:
 
 
     def manual_refresh(self, delay: float):
-        self._job.modify(next_run_time=datetime.now() + timedelta(seconds=delay))
+        if self._job:
+            self._job.modify(next_run_time=datetime.now() + timedelta(seconds=delay))
 
 
     def stop(self):

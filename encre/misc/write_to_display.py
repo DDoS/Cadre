@@ -21,7 +21,7 @@ def main():
                         help='Optional preview image output')
     parser.add_argument('--status', action='store_true', help='Print status')
     parser.add_argument('--palette', metavar='name', type=str, required=False,
-                        default='waveshare_7_color_palette', help='Display palette name')
+                        default='waveshare_7_color', help='Display palette name')
     parser.add_argument('--options', metavar='json', type=str, required=False, default={},
                         help='Options as a JSON encoded string')
     arguments = parser.parse_args()

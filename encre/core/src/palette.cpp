@@ -30,17 +30,17 @@ namespace encre {
             {15.45f, 5.08f, -8.48f},
             {73.65f, -1.01f, 2.65f},
             {42.76f, -31.94f, 16.43f},
-            {27.32f, 8.84f, -34.38f},
+            {28.f, 9.2f, -25.f},
             {49.02f, 35.9f, 17.4f},
             {68.38f, -4.95f, 56.42f},
-            {55.04f, 24.9f, 30.0f},
+            {55.04f, 24.9f, 30.f},
         })
     );
 
     // Using std::map to keep the name ordering consistent
     const std::map<std::string, const Palette*> palette_by_name{
-        {"waveshare_7_color_palette", &waveshare_7_color_palette},
-        {"inky_7_color_palette", &inky_7_color_palette},
+        {"waveshare_7_color", &waveshare_7_color_palette},
+        {"inky_7_color", &inky_7_color_palette},
     };
 
     Palette make_palette(std::span<const CIEXYZ> colors, float target_luminance) {

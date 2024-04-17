@@ -1,5 +1,5 @@
 {
     "TEMP_PATH": "temp",
     "DISPLAY_WRITER_PATH": "../encre/misc/write_to_display.py",
-    "DISPLAY_PALETTE": "waveshare_7_color_palette"
+    "DISPLAY_PALETTE": "waveshare_7_color"
 }

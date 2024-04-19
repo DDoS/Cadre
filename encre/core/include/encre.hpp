@@ -54,9 +54,12 @@ namespace encre {
     struct Palette {
         static constexpr float default_target_luminance = 90;
 
+        std::vector<Oklab> points;
         std::vector<Oklab> gamut_vertices;
-        std::vector<Plane> gamut_hull;
-        glm::vec2 gray_line;
+        std::vector<Plane> gamut_planes;
+        glm::vec2 gray_line{};
+        float lightness_range{};
+        float max_chroma{};
     };
 
     enum class Rotation {
@@ -77,7 +80,7 @@ namespace encre {
         static constexpr float no_brightness_change = 0;
         static constexpr float default_sharpening = 4;
         static constexpr float default_clipped_chroma_recovery = 1.f;
-        static constexpr float default_error_attenuation = 0.2f;
+        static constexpr float default_error_attenuation = 0.1f;
 
         Rotation rotation = default_rotation;
         float dynamic_range = default_dynamic_range;

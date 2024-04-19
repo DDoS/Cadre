@@ -61,9 +61,12 @@ PYBIND11_MODULE(py_encre, m) {
 
     py::class_<encre::Palette>(m, "Palette").
         def_readonly_static("default_target_luminance", &encre::Palette::default_target_luminance).
+        def_readwrite("points", &encre::Palette::points).
         def_readwrite("gamut_vertices", &encre::Palette::gamut_vertices).
-        def_readwrite("gamut_hull", &encre::Palette::gamut_hull).
-        def_readwrite("gray_line", &encre::Palette::gray_line);
+        def_readwrite("gamut_planes", &encre::Palette::gamut_planes).
+        def_readwrite("gray_line", &encre::Palette::gray_line).
+        def_readwrite("lightness_range", &encre::Palette::lightness_range).
+        def_readwrite("max_chroma", &encre::Palette::max_chroma);
 
     py::enum_<encre::Rotation>(m, "Rotation").
         value("automatic", encre::Rotation::automatic).

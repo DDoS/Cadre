@@ -8,13 +8,16 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/gtx/compatibility.hpp>
 
+#include <random>
+
 namespace {
-    constexpr float epsilon = 1e-5;
+    constexpr float epsilon = 1e-5f;
+    constexpr auto lightness_relative_scale = 0.5f;
 
     bool is_inside_palette_gamut(const encre::Palette& palette, const glm::vec3& lab) {
-        for (const auto& plane : palette.gamut_hull) {
-            const auto d = glm::dot(glm::vec4(lab, 1), plane);
-            if (d >= epsilon) {
+        for (const auto& plane : palette.gamut_planes) {
+            const auto distance = glm::dot(glm::vec4(lab, 1), plane);
+            if (distance >= epsilon) {
                 return false;
             }
         }
@@ -52,13 +55,13 @@ namespace {
 
         glm::vec3 clamped_lab{};
         auto closest_distance_to_target = std::numeric_limits<float>::max();
-        for (const auto& plane : palette.gamut_hull) {
-            float d = glm::dot(clamp_direction, glm::xyz(plane));
-            if (d > -epsilon) {
+        for (const auto& plane : palette.gamut_planes) {
+            float angle_cosine = glm::dot(clamp_direction, glm::xyz(plane));
+            if (angle_cosine > -epsilon) {
                 continue;
             }
 
-            const auto t = -glm::dot(glm::vec4(lab, 1), plane) / d;
+            const auto t = -glm::dot(glm::vec4(lab, 1), plane) / angle_cosine;
             const auto lab_projected = lab + t * clamp_direction;
 
             if (glm::dot(hue_chroma, glm::yz(lab_projected)) < -epsilon) {
@@ -104,10 +107,14 @@ namespace {
     }
 
     std::pair<uint8_t, float> closest_palette_color(const encre::Palette& palette, const glm::vec3& lab) {
+        const auto normalization_scale = 1.f / glm::vec3{palette.lightness_range * lightness_relative_scale,
+                palette.max_chroma, palette.max_chroma};
+
         auto closest_distance_square = std::numeric_limits<float>::max();
         int closest_index = -1;
-        for (int i = 0; i < palette.gamut_vertices.size(); i++) {
-            const auto distance_square = glm::distance2(lab, palette.gamut_vertices[i]);
+        for (int i = 0; i < palette.points.size(); i++) {
+            const auto delta = lab - palette.points[i];
+            const auto distance_square = glm::length2(delta * normalization_scale);
             if (distance_square < closest_distance_square) {
                 closest_distance_square = distance_square;
                 closest_index = i;
@@ -145,8 +152,8 @@ namespace {
         }
     }
 
-    void dither_batch(const encre::Palette& palette, float error_attenuation, const vips::VRegion& in_region,
-            const vips::VRegion& out_region) {
+    void dither_batch(const encre::Palette& palette, float error_attenuation,
+            const vips::VRegion& in_region, const vips::VRegion& out_region) {
         const auto in_rectangle = in_region.valid();
         const auto out_rectangle = out_region.valid();
 
@@ -160,16 +167,16 @@ namespace {
                 const auto old_pixel = glm::make_vec3(p + ix);
                 const auto [new_index, error] = closest_palette_color(palette, old_pixel);
                 #ifndef NDEBUG
-                if (new_index >= palette.gamut_vertices.size()) {
+                if (new_index >= palette.points.size()) {
                     __builtin_debugtrap();
                 }
                 #endif
-                const auto new_pixel = static_cast<glm::vec3>(palette.gamut_vertices[new_index]);
+                const auto new_pixel = static_cast<glm::vec3>(palette.points[new_index]);
 
                 q[x] = new_index;
                 std::memcpy(p + ix, glm::value_ptr(new_pixel), sizeof(new_pixel));
 
-                const auto scale = 1 / (1 + glm::exp(error_attenuation * error - (1 / error_attenuation) - 4));
+                const auto scale = glm::exp(-error_attenuation * error);
                 const auto delta = (old_pixel - new_pixel) * scale;
                 diffuse_dither_error_fs(in_rectangle, {x, y, ix}, delta, p, p_down);
             }

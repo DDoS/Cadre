@@ -52,11 +52,14 @@ namespace encre {
     };
 
     struct Palette {
-        static constexpr float default_target_luminance = 80;
+        static constexpr float default_target_luminance = 90;
 
+        std::vector<Oklab> points;
         std::vector<Oklab> gamut_vertices;
-        std::vector<Plane> gamut_hull;
-        glm::vec2 gray_line;
+        std::vector<Plane> gamut_planes;
+        glm::vec2 gray_line{};
+        float lightness_range{};
+        float max_chroma{};
     };
 
     enum class Rotation {
@@ -77,6 +80,7 @@ namespace encre {
         static constexpr float no_brightness_change = 0;
         static constexpr float default_sharpening = 4;
         static constexpr float default_clipped_chroma_recovery = 1.f;
+        static constexpr float default_error_attenuation = 0.1f;
 
         Rotation rotation = default_rotation;
         float dynamic_range = default_dynamic_range;
@@ -85,13 +89,19 @@ namespace encre {
         float contrast = default_contrast;
         float sharpening = default_sharpening;
         float clipped_chroma_recovery = default_clipped_chroma_recovery;
+        float error_attenuation = default_error_attenuation;
     };
 
     // Using std::map to keep the name ordering consistent
     ENCRE_EXPORT extern const std::map<std::string, encre::Rotation> rotation_by_name;
 
-    // Builtin palette for https://www.waveshare.com/7.3inch-e-paper-hat-f.htm
-    ENCRE_EXPORT extern const Palette waveshare_7dot3_inch_e_paper_f_palette;
+    // From data sheetsection 8-1: https://www.waveshare.com/7.3inch-e-paper-hat-f.htm
+    ENCRE_EXPORT extern const Palette waveshare_7_color_palette;
+
+    // Measured as best I could from: https://shop.pimoroni.com/products/inky-impression-7-3
+    ENCRE_EXPORT extern const Palette inky_7_color_palette;
+
+    ENCRE_EXPORT extern const std::map<std::string, const Palette*> palette_by_name;
 
     ENCRE_EXPORT void initialize(const char* executable_path);
 

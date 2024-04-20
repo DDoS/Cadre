@@ -11,8 +11,8 @@ Install format dependencies:
 This list of dependencies covers almost all supported image formats.
 Feel free to trim down to what actually want.
 
-Build latest ImageMagick 6
-    clone: https://github.com/ImageMagick/ImageMagick6.git
+Build latest ImageMagick
+    run: git clone --depth 1 --branch <latest version tag>  https://github.com/ImageMagick/ImageMagick.git
     run: ./configure --with-modules --prefix="`pwd`/install"
     run: make
     run: make install
@@ -20,7 +20,7 @@ Build latest ImageMagick 6
 
 Build latest libvips
     install: meson
-    clone: https://github.com/libvips/libvips.git
+    run: git clone --depth 1 --branch <latest version tag> https://github.com/libvips/libvips.git
     append to PKG_CONFIG_PATH: "<ImageMagick path>/install/lib/pkgconfig"
     run: meson setup build --buildtype=release --prefix="`pwd`/install" --libdir lib
     run: meson compile
@@ -30,4 +30,4 @@ Before configuring Encre:
     append to PKG_CONFIG_PATH: "<libvips path>/install/lib/pkgconfig"
 
 Before running Expo:
-    append to LD_LIBRARY_PATH: "<libvips path>libvips/install/lib"
+    append to LD_LIBRARY_PATH: "<libvips path>/install/lib"

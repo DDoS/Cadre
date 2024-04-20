@@ -33,9 +33,16 @@ int main(int arg_count, char** arg_values) {
     arguments.add_argument("-c", "--contrast").scan<'g', float>().metavar("factor").help("contrast");
     arguments.add_argument("-s", "--sharpening").scan<'g', float>().metavar("factor").help("sharpening");
     arguments.add_argument("-g", "--clipped-chroma-recovery").scan<'g', float>().metavar("factor").help("clipped chroma recovery");
+    arguments.add_argument("-a", "--error-attenuation").scan<'g', float>().metavar("factor").help("dither error attenuation");
+
     auto& rotation_argument = arguments.add_argument("-r", "--rotation").metavar("orientation").help("image rotation");
     for (const auto& [name, _] : encre::rotation_by_name) {
         rotation_argument.add_choice(name);
+    }
+
+    auto& palette_argument = arguments.add_argument("-l", "--palette").metavar("name").help("display palette");
+    for (const auto& [name, _] : encre::palette_by_name) {
+        palette_argument.add_choice(name);
     }
 
     try {
@@ -61,6 +68,10 @@ int main(int arg_count, char** arg_values) {
         preview_image_path = (output_image_path.parent_path() / (output_image_path.stem() += "_preview.png"));
     }
 
+    auto palette = &encre::waveshare_7_color_palette;
+    if (const auto value = arguments.present("-l"))
+        palette = encre::palette_by_name.at(*value);
+
     encre::Options options{};
     if (const auto value = arguments.present("-r"))
         options.rotation = encre::rotation_by_name.at(*value);
@@ -70,12 +81,13 @@ int main(int arg_count, char** arg_values) {
     read_option(arguments, "-c", options.contrast);
     read_option(arguments, "-s", options.sharpening);
     read_option(arguments, "-g", options.clipped_chroma_recovery);
+    read_option(arguments, "-a", options.error_attenuation);
 
     encre::initialize(arg_values[0]);
 
     std::vector<uint8_t> output;
     output.resize(width * height);
-    if (encre::convert(input_image_path.c_str(), width, height, encre::waveshare_7dot3_inch_e_paper_f_palette, options,
+    if (encre::convert(input_image_path.c_str(), width, height, *palette, options,
             output, preview_image_path.empty() ? nullptr : preview_image_path.c_str())) {
         std::ofstream fs{output_image_path, std::ios::binary};
         fs.write(reinterpret_cast<const char*>(output.data()), output.size() * sizeof(uint8_t));

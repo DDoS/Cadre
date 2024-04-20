@@ -55,25 +55,24 @@ bool inside_srgb_gamut(vec3 c) {
     return all(greaterThan(c, vec3(0.0))) && all(lessThan(c, vec3(1.0)));
 }
 
-const int palette_hull_facet_count = 10;
+const int palette_hull_facet_count = 8;
 const vec4[palette_hull_facet_count] palette_hull = vec4[palette_hull_facet_count](
-    vec4(0.3244, 0.87509, 0.359142, -29.7101),
-    vec4(0.188987, -0.977347, -0.0952675, -17.192),
-    vec4(-0.137374, 0.806091, -0.575626, 1.82368),
-    vec4(0.136985, 0.669424, -0.730142, -11.9776),
-    vec4(-0.281489, -0.872841, -0.398639, 10.9129),
-    vec4(0.100215, -0.753107, -0.650221, -8.75222),
-    vec4(0.322903, 0.873958, 0.363223, -29.6286),
-    vec4(-0.223619, -0.113394, 0.968058, 8.43461),
-    vec4(-0.32781, 0.120444, 0.937035, 13.7296),
-    vec4(-0.301063, -0.0618804, 0.951594, 13.1911)
+    vec4(-0.272801, -0.134914, 0.952564, 0.11646),
+    vec4(0.279498, -0.959183, -0.0430021, -0.253395),
+    vec4(-0.246056, 0.240804, 0.938866, 0.102875),
+    vec4(0.362799, 0.886759, 0.28642, -0.326518),
+    vec4(-0.315939, -0.944188, -0.0932274, 0.115877),
+    vec4(0.15837, -0.779958, -0.605462, -0.140088),
+    vec4(-0.121053, 0.882153, -0.455139, 0.0209083),
+    vec4(0.147669, 0.673127, -0.724634, -0.126383)
 );
-const vec2 gray_line = vec2(43.8149, 87.3344) / 100.0;
-const float lightness_adaptation_factor = 5.0;
+const vec2 gray_line = vec2(0.426903, 0.855853);
+
+const float lightness_adaptation_factor = 0.0;
 
 bool lab_inside_palette_gamut(vec3 lab) {
     for (int i = 0; i < palette_hull_facet_count; i++) {
-        if (dot(vec4(lab, 0.01), palette_hull[i]) > 1e-4)
+        if (dot(vec4(lab, 1.0), palette_hull[i]) > 1e-4)
             return false;
     }
 
@@ -82,6 +81,10 @@ bool lab_inside_palette_gamut(vec3 lab) {
 
 // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent
 vec3 compute_gamut_clamp_target(float alpha, const float l, const float chroma) {
+    if (alpha < 1e-4) {
+        return vec3(clamp(l, gray_line.x, gray_line.y), 0, 0);
+    }
+
     float range = gray_line.y - gray_line.x;
 
     float l_start = (l - gray_line.x) / range;
@@ -96,7 +99,7 @@ vec3 clamp_to_palette_gamut(vec3 lab) {
     float chroma = length(lab.yz);
     float alpha = lightness_adaptation_factor;
     vec2 min_max_gray = gray_line + vec2(1e-4, -1e-4);
-    if (chroma < 1e-4 || alpha < 1e-4 && (lab.x < min_max_gray.x || lab.x > min_max_gray.y)) {
+    if (chroma < 1e-4) {
         return vec3(clamp(lab.x, gray_line.x, gray_line.y), 0, 0);
     }
 
@@ -114,7 +117,7 @@ vec3 clamp_to_palette_gamut(vec3 lab) {
             continue;
         }
 
-        float t = -dot(vec4(lab, 0.01), plane) / d;
+        float t = -dot(vec4(lab, 1.0), plane) / d;
         vec3 lab_projected = lab + t * clamp_direction;
 
         if (dot(hue_chroma, lab_projected.yz) < -1e-4) {

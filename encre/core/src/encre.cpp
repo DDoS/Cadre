@@ -47,7 +47,7 @@ namespace encre {
         vips::VImage image;
         std::exception vips_load_error;
         try {
-            image = vips::VImage::new_from_file(image_path, vips::VImage::option()->set("autorotate", true));
+            image = vips::VImage::new_from_file(image_path);
         } catch (const std::exception& error) {
             vips_load_error = error;
         }
@@ -73,6 +73,8 @@ namespace encre {
             if (image.has_alpha()) {
                 image = image.flatten(vips::VImage::option()->set("background", fill_color));
             }
+
+            image = image.autorot();
 
             auto computed_rotation = options.rotation;
             if (computed_rotation == Rotation::automatic && image.height() > image.width()) {
@@ -108,7 +110,7 @@ namespace encre {
             image = image.gravity(VipsCompassDirection::VIPS_COMPASS_DIRECTION_CENTRE, width, height,
                 vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));
 
-            dither(image, palette, options.clipped_chroma_recovery, output);
+            dither(image, palette, options.clipped_chroma_recovery, options.error_attenuation, output);
 
             if (preview_image_path) {
                 // Undo rotation

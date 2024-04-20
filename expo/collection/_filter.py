@@ -23,13 +23,15 @@ class Filter:
 def parse_filter(source: str) -> Filter:
     tokens = _split_tokens(source)
     _ = next(tokens)
+
     expression = _parse_expression(tokens)
 
     token, indices = next(tokens)
-    if token != '':
-        raise ValueError(f'Unknown token from {indices[0]} to {indices[1]}: "{token}"')
-
-    return expression
+    match token:
+        case '':
+            return expression
+        case other:
+            raise ValueError(f'Unknown token from {indices[0]} to {indices[1]}: "{other}"')
 
 
 class _UnaryOperator(Enum):
@@ -43,18 +45,20 @@ class _UnaryOperation(Filter):
         self._operand = operand
 
     def to_sql(self) -> str:
-        if self._operator == _UnaryOperator.NOT:
-            token = 'NOT'
-        else:
-            raise ValueError(self._operator)
+        match self._operator:
+            case _UnaryOperator.NOT:
+                token = 'NOT'
+            case other:
+                raise ValueError(other)
 
         return f'{token} ({self._operand.to_sql()})'
 
     def __str__(self) -> str:
-        if self._operator == _UnaryOperator.NOT:
-            token = 'not'
-        else:
-            raise ValueError(self._operator)
+        match self._operator:
+            case _UnaryOperator.NOT:
+                token = 'not'
+            case other:
+                raise ValueError(other)
 
         return f'{token} ({self._operand})'
 
@@ -73,22 +77,24 @@ class _BinaryOperation(Filter):
         self._right_operand = right_operand
 
     def to_sql(self) -> str:
-        if self._operator == _BinaryOperator.OR:
-            token = 'OR'
-        elif self._operator == _BinaryOperator.AND:
-            token = 'AND'
-        else:
-            raise ValueError(self._operator)
+        match self._operator:
+            case _BinaryOperator.OR:
+                token = 'OR'
+            case _BinaryOperator.AND:
+                token = 'AND'
+            case other:
+                raise ValueError(other)
 
         return f'({self._left_operand.to_sql()}) {token} ({self._right_operand.to_sql()})'
 
     def __str__(self) -> str:
-        if self._operator == _BinaryOperator.OR:
-            token = 'or'
-        elif self._operator == _BinaryOperator.AND:
-            token = 'and'
-        else:
-            raise ValueError(self._operator)
+        match self._operator:
+            case _BinaryOperator.OR:
+                token = 'or'
+            case _BinaryOperator.AND:
+                token = 'and'
+            case other:
+                raise ValueError(other)
 
         return f'({self._left_operand}) {token} ({self._right_operand})'
 
@@ -105,26 +111,28 @@ class _Aspect(Filter):
         self._name = name
 
     def to_sql(self) -> str:
-        if self._name == _NamedAspect.LANDSCAPE:
-            token = '>'
-        elif self._name == _NamedAspect.PORTRAIT:
-            token = '<'
-        elif self._name == _NamedAspect.SQUARE:
-            token = '=='
-        else:
-            raise ValueError(self._name)
+        match self._name:
+            case _NamedAspect.LANDSCAPE:
+                token = '>'
+            case _NamedAspect.PORTRAIT:
+                token = '<'
+            case _NamedAspect.SQUARE:
+                token = '=='
+            case other:
+                raise ValueError(other)
 
-        return f'width {token} height'
+        return f'photos.width {token} photos.height'
 
     def __str__(self) -> str:
-        if self._name == _NamedAspect.LANDSCAPE:
-            return 'landscape'
-        if self._name == _NamedAspect.PORTRAIT:
-            return 'portrait'
-        if self._name == _NamedAspect.SQUARE:
-            return 'square'
-
-        raise ValueError(self._name)
+        match self._name:
+            case _NamedAspect.LANDSCAPE:
+                return 'landscape'
+            case _NamedAspect.PORTRAIT:
+                return 'portrait'
+            case _NamedAspect.SQUARE:
+                return 'square'
+            case other:
+                raise ValueError(other)
 
 
 class _Favorite(Filter):
@@ -132,7 +140,7 @@ class _Favorite(Filter):
         super().__init__(source)
 
     def to_sql(self) -> str:
-        return 'favorite'
+        return 'COALESCE(photos.favorite, 0)'
 
     def __str__(self) -> str:
         return 'favorite'
@@ -153,34 +161,47 @@ class _BoolLiteral(Filter):
 Tokenizer = Generator[tuple[str, tuple[int, int]], bool | None, None]
 def _split_tokens(source: str) -> Tokenizer:
     separator_chars = string.whitespace
-    operator_chars = string.punctuation
+    operator_chars = '()'
+    operator_set = {'(', ')'}
     number_chars = string.digits
     identifier_start_chars = string.ascii_letters
     identifier_continue_chars = identifier_start_chars + number_chars
 
+    def consume_char(index: int, token_chars: str):
+        return index < len(source) and source[index] in token_chars
+
     end = 0
     start = end
+
+    def continue_token(token_chars: str, token_set: set[str] = {}):
+        if source[start:end] in token_set:
+            return False
+
+        return consume_char(end, token_chars)
+
     repeat_next = yield '', (start, end)
 
     while True:
-        while start < len(source) and source[start] in separator_chars:
+        while consume_char(start, separator_chars):
             start += 1
 
         end = start
         if end >= len(source):
             break
 
+        token_set = {}
         if source[end] in operator_chars:
             token_chars = operator_chars
+            token_set = operator_set
         elif source[end] in number_chars:
             token_chars = number_chars
         elif source[end] in identifier_start_chars:
             token_chars = identifier_continue_chars
         else:
-            raise ValueError(f'Unknown character at index {end}: "{ord(source[end])}"')
+            raise ValueError(f'Invalid character at index {end}: "{ord(source[end])}"')
         end += 1
 
-        while end < len(source) and source[end] in token_chars:
+        while continue_token(token_chars, token_set):
             end += 1
 
         while True:
@@ -209,13 +230,14 @@ def _parse_expression(tokens: Tokenizer) -> _Expression:
 def _parse_or(tokens: Tokenizer) -> _Or:
     def parse_or_right(tokens: Tokenizer, left_operand: _Unary) -> _Or:
         token, indices = tokens.send(True)
-        if token != 'or':
-            return left_operand
-
-        _ = next(tokens)
-        right_operand = _parse_and(tokens)
-        left_operand = _BinaryOperation(indices, _BinaryOperator.OR, left_operand, right_operand)
-        return parse_or_right(tokens, left_operand)
+        match token:
+            case 'or':
+                _ = next(tokens)
+                right_operand = _parse_and(tokens)
+                left_operand = _BinaryOperation(indices, _BinaryOperator.OR, left_operand, right_operand)
+                return parse_or_right(tokens, left_operand)
+            case _:
+                return left_operand
 
     left_operand = _parse_and(tokens)
     return parse_or_right(tokens, left_operand)
@@ -224,13 +246,14 @@ def _parse_or(tokens: Tokenizer) -> _Or:
 def _parse_and(tokens: Tokenizer) -> _And:
     def parse_and_right(tokens: Tokenizer, left_operand: _Unary) -> _And:
         token, indices = tokens.send(True)
-        if token != 'and':
-            return left_operand
-
-        _ = next(tokens)
-        right_operand = _parse_unary(tokens)
-        left_operand = _BinaryOperation(indices, _BinaryOperator.AND, left_operand, right_operand)
-        return parse_and_right(tokens, left_operand)
+        match token:
+            case 'and':
+                _ = next(tokens)
+                right_operand = _parse_unary(tokens)
+                left_operand = _BinaryOperation(indices, _BinaryOperator.AND, left_operand, right_operand)
+                return parse_and_right(tokens, left_operand)
+            case _:
+                return left_operand
 
     left_operand = _parse_unary(tokens)
     return parse_and_right(tokens, left_operand)
@@ -238,34 +261,37 @@ def _parse_and(tokens: Tokenizer) -> _And:
 
 def _parse_unary(tokens: Tokenizer) -> _Unary:
     token, indices = tokens.send(True)
-    if token == 'not':
-        _ = next(tokens)
-        operand = _parse_atom(tokens)
-        return _UnaryOperation(indices, _UnaryOperator.NOT, operand)
-
-    return _parse_atom(tokens)
+    match token:
+        case 'not':
+            _ = next(tokens)
+            operand = _parse_atom(tokens)
+            return _UnaryOperation(indices, _UnaryOperator.NOT, operand)
+        case _:
+            return _parse_atom(tokens)
 
 
 def _parse_atom(tokens: Tokenizer) -> _Atom:
     token, indices = next(tokens)
-    if token == 'landscape':
-        return _Aspect(indices, _NamedAspect.LANDSCAPE)
-    if token == 'portrait':
-        return _Aspect(indices, _NamedAspect.PORTRAIT)
-    if token == 'square':
-        return _Aspect(indices, _NamedAspect.SQUARE)
-    if token == 'favorite':
-        return _Favorite(indices)
-    if token == 'true':
-        return _BoolLiteral(indices, True)
-    if token == 'false':
-        return _BoolLiteral(indices, False)
-    if token == '(':
-        expression = _parse_expression(tokens)
-        token, indices = next(tokens)
-        if token != ')':
-            raise ValueError(f'Expected ")" at {indices[0]}')
-
-        return expression
-
-    raise ValueError(f'Unknown token from {indices[0]} to {indices[1]}: "{token}"')
+    match token:
+        case 'landscape':
+            return _Aspect(indices, _NamedAspect.LANDSCAPE)
+        case 'portrait':
+            return _Aspect(indices, _NamedAspect.PORTRAIT)
+        case 'square':
+            return _Aspect(indices, _NamedAspect.SQUARE)
+        case 'favorite':
+            return _Favorite(indices)
+        case 'true':
+            return _BoolLiteral(indices, True)
+        case 'false':
+            return _BoolLiteral(indices, False)
+        case '(':
+            expression = _parse_expression(tokens)
+            token, indices = next(tokens)
+            match token:
+                case ')':
+                    return expression
+                case other:
+                    raise ValueError(f'Expected ")" at position {indices[0]}, but got "{other}"')
+        case other:
+            raise ValueError(f'Unknown token from {indices[0]} to {indices[1]}: "{other}"')

@@ -4,7 +4,6 @@ import subprocess
 import json
 import random
 import threading
-import traceback
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from logging.config import dictConfig

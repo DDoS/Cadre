@@ -191,7 +191,7 @@ def init_collections(photo_db_path: Path):
         for row in db.execute('SELECT id, identifier, display_name, schedule, enabled, class_name, settings_json FROM collections'):
             class_name = row[5]
             CollectionClass = _collection_class_from_name(class_name)
-            collections.append(CollectionClass(row[0], row[1], row[2], row[3], row[4], json.loads(row[6])))
+            collections.append(CollectionClass(row[0], row[1], row[2], row[3], bool(row[4]), json.loads(row[6])))
     finally:
         db.close()
 

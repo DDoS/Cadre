@@ -55,12 +55,16 @@ class Collection:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def __init__(self, id: int | None, identifier: str, display_name: str, schedule: str, settings: dict[str, Any]):
+    def __init__(self, id: int | None, identifier: str, display_name: str,
+                 schedule: str, enabled: bool, settings: dict[str, Any]):
         self._id = id
         self._identifier = identifier
         self._display_name = display_name
         self._schedule = schedule
         self._settings = settings
+        self._enabled = enabled
+        self._queue = None
+        self._process = None
 
         if errors := self._get_settings_schema()().validate(self._settings):
             raise ValidationError(errors, data=self._settings)
@@ -76,6 +80,10 @@ class Collection:
     @property
     def schedule(self):
         return self._schedule
+
+    @property
+    def enabled(self):
+        return self._enabled
 
     @property
     def class_name(self):
@@ -97,6 +105,9 @@ class Collection:
         raise NotImplementedError()
 
     def start(self, photo_db_path: Path):
+        if not self._enabled:
+            raise ValueError('Can\'t start a disabled collection')
+
         self._queue = mp.Queue()
         self._process = mp.Process(target=_start_process, args=(self._queue, photo_db_path, self._id, self._identifier,
                                                                 self._schedule, self._get_process_class(), self._settings))
@@ -104,7 +115,6 @@ class Collection:
 
     def manual_update(self, delay: float = 0):
         if self._process is not None and self._queue is not None:
-            print(delay)
             self._queue.put(_UpdateMessage(delay))
 
     @abstractmethod
@@ -112,11 +122,12 @@ class Collection:
         raise NotImplementedError()
 
     def stop(self):
-        self._queue.put(_StopMessage())
-        self._process.join()
-        self._process = None
+        if self._process is not None and self._queue is not None:
+            self._queue.put(_StopMessage())
+            self._process.join()
+            self._queue.close()
 
-        self._queue.close()
+        self._process = None
         self._queue = None
 
 
@@ -133,22 +144,23 @@ def _collection_class_from_name(class_name: str) -> type[Collection]:
 
 
 def _create_collection(db: sqlite3.Connection, id: int | None, identifier: str, display_name: str,
-                       schedule: str, class_name: str,  settings: dict[str, Any]) -> Collection:
+                       schedule: str, enabled: bool, class_name: str, settings: dict[str, Any]) -> Collection:
     CollectionClass = _collection_class_from_name(class_name)
-    collection = CollectionClass(id, identifier, display_name, schedule, settings)
+    collection = CollectionClass(id, identifier, display_name, schedule, enabled, settings)
 
     row = {
         'id': id,
         'identifier': collection.identifier,
         'display_name': collection.display_name,
-        'class_name': collection.class_name,
         'schedule': collection.schedule,
+        'enabled': collection.enabled,
+        'class_name': collection.class_name,
         'settings_json': json.dumps(collection.settings)
     }
     with db:
-        id, = db.execute('INSERT INTO collections VALUES(:id, :identifier, :display_name, :schedule, :class_name, :settings_json) '
-                         'ON CONFLICT(id) DO UPDATE SET identifier = :identifier, display_name = :display_name, '
-                         'schedule = :schedule, class_name = :class_name, settings_json = :settings_json RETURNING id', row).fetchone()
+        id, = db.execute('INSERT INTO collections VALUES(:id, :identifier, :display_name, :schedule, :enabled, :class_name, :settings_json) '
+                         'ON CONFLICT(id) DO UPDATE SET identifier = :identifier, display_name = :display_name, schedule = :schedule, '
+                         'enabled = :enabled, class_name = :class_name, settings_json = :settings_json RETURNING id', row).fetchone()
 
     collection._set_id(id)
     return collection
@@ -176,16 +188,17 @@ def init_collections(photo_db_path: Path):
     collections: list[Collection] = []
     try:
         db = photo_db.open(photo_db_path)
-        for row in db.execute('SELECT id, identifier, display_name, schedule, class_name, settings_json FROM collections'):
-            class_name = row[4]
+        for row in db.execute('SELECT id, identifier, display_name, schedule, enabled, class_name, settings_json FROM collections'):
+            class_name = row[5]
             CollectionClass = _collection_class_from_name(class_name)
-            collections.append(CollectionClass(row[0], row[1], row[2], row[3], json.loads(row[5])))
+            collections.append(CollectionClass(row[0], row[1], row[2], row[3], row[4], json.loads(row[6])))
     finally:
         db.close()
 
     for collection in collections:
-        collection_logger.info(f'Starting "{collection.identifier}"')
-        collection.start(photo_db_path)
+        if collection.enabled:
+            collection_logger.info(f'Starting "{collection.identifier}"')
+            collection.start(photo_db_path)
 
     collection_logger.info('Started all collections')
 
@@ -208,24 +221,26 @@ def has_collection(identifier: str):
 
 
 def add_collection(photo_db_path: Path, identifier: str, display_name: str,
-                   schedule: str, class_name: str, settings: dict[str, Any]) -> Collection:
+                   schedule: str, enabled: bool, class_name: str, settings: dict[str, Any]) -> Collection:
     if identifier in _collections_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
     try:
         db = photo_db.open(photo_db_path)
-        collection = _create_collection(db, None, identifier, display_name, schedule, class_name, settings)
+        collection = _create_collection(db, None, identifier, display_name, schedule, enabled, class_name, settings)
         collection_logger.info(f'Added "{collection.identifier}"')
     finally:
         db.close()
 
     _collections_by_identifier[collection.identifier] = collection
-    collection.start(photo_db_path)
+    if collection.enabled:
+        collection.start(photo_db_path)
+
     return collection
 
 
 def modify_collection(photo_db_path: Path, collection: Collection, identifier: str = None, display_name: str = None,
-                      schedule: str = None, class_name: str = None, settings: dict[str, Any] = None) -> Collection:
+                      schedule: str = None, enabled: bool = None, class_name: str = None, settings: dict[str, Any] = None) -> Collection:
     if identifier in _collections_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
@@ -235,6 +250,8 @@ def modify_collection(photo_db_path: Path, collection: Collection, identifier: s
         display_name = collection.display_name
     if schedule is None:
         schedule = collection.schedule
+    if enabled is None:
+        enabled = collection.enabled
     if class_name is None:
         class_name = collection.class_name
     if settings is None:
@@ -245,13 +262,15 @@ def modify_collection(photo_db_path: Path, collection: Collection, identifier: s
 
     try:
         db = photo_db.open(photo_db_path)
-        collection = _create_collection(db, collection._id, identifier, display_name, schedule, class_name, settings)
+        collection = _create_collection(db, collection._id, identifier, display_name, schedule, enabled, class_name, settings)
         collection_logger.info(f'Modified "{collection.identifier}"')
     finally:
         db.close()
 
     _collections_by_identifier[collection.identifier] = collection
-    collection.start(photo_db_path)
+    if collection.enabled:
+        collection.start(photo_db_path)
+
     return collection
 
 
@@ -272,9 +291,11 @@ def get_new_photo_url(photo_db_path: Path, filter: Filter) -> str | None:
     try:
         db = photo_db.open(photo_db_path)
         sql_filter = filter.to_sql()
-        row = db.execute('SELECT id, collection_id FROM (SELECT id, collection_id, '
-                         f'display_date FROM photos WHERE {sql_filter} ORDER BY RANDOM() '
-                         'LIMIT 2) ORDER BY datetime(display_date) ASC LIMIT 1').fetchone()
+        # Nested SELECT query for random selection is much faster: https://stackoverflow.com/a/24591696
+        row = db.execute('SELECT id, collection_id FROM (SELECT id, collection_id, display_date FROM photos WHERE id IN '
+                         '(SELECT photos.id FROM photos INNER JOIN collections ON collections.id = photos.collection_id WHERE '
+                         f'collections.enabled AND ({sql_filter}) ORDER BY RANDOM() LIMIT 2)) ORDER BY datetime(display_date) '
+                         'ASC LIMIT 1').fetchone()
         if not row:
             return None
 

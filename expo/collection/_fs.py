@@ -185,8 +185,9 @@ class FileSystemCollectionProcess(CollectionProcess):
 
 
 class FileSystemCollection(Collection):
-    def __init__(self, id: int, identifier: str, display_name: str, schedule: str, settings: dict[str, Any]):
-        super().__init__(id, identifier, display_name, schedule, settings)
+    def __init__(self, id: int, identifier: str, display_name: str,
+                 schedule: str, enabled: bool, settings: dict[str, Any]):
+        super().__init__(id, identifier, display_name, schedule, enabled, settings)
         self._root_path = PurePosixPath(settings['root_path'])
 
     def _get_settings_schema(self):

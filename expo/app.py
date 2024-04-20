@@ -139,6 +139,7 @@ def collections():
             'identifier': collection.identifier,
             'display_name': collection.display_name,
             'schedule': collection.schedule,
+            'enabled': collection.enabled,
             'class_name': collection.class_name,
             'settings': collection.settings
         }
@@ -157,6 +158,7 @@ def collections():
                 identifier = fields.String(required=True)
                 display_name = fields.String()
                 schedule = fields.String(required=True)
+                enabled = fields.Boolean(load_default=True)
                 class_name = fields.String(required=True)
                 settings = fields.Dict(load_default={})
 
@@ -171,7 +173,7 @@ def collections():
                     return 'A collection for the given identifier already exists', 400
 
                 collection = add_collection(app.config['PHOTO_DB_PATH'], identifier, result.get('display_name', identifier),
-                                            result['schedule'], result['class_name'], result['settings'])
+                                            result['schedule'], result['enabled'], result['class_name'], result['settings'])
                 app.logger.info(f'Added collection "{identifier}"')
                 return collection_to_dict(collection), 200
             except ValidationError as error:
@@ -199,6 +201,7 @@ def collections():
             identifier = fields.String()
             display_name = fields.String()
             schedule = fields.String()
+            enabled = fields.Boolean()
             class_name = fields.String()
             settings = fields.Dict()
 
@@ -209,7 +212,7 @@ def collections():
 
         try:
             collection = modify_collection(app.config['PHOTO_DB_PATH'], collection, result.get('identifier'), result.get('display_name'),
-                                           result.get('schedule'), result.get('class_name'), result.get('settings'))
+                                           result.get('schedule'), result.get('enabled'), result.get('class_name'), result.get('settings'))
             app.logger.info(f'Modified collection "{identifier}"')
             return collection_to_dict(collection), 200
         except Exception:

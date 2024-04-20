@@ -93,6 +93,7 @@ Create a collection by `PUT`ting to `/collections` a JSON object like so:
     "identifier": "my_collection",
     "display_name": "My Collection",
     "schedule": "*/5 * * * *",
+    "enabled": true,
     "class_name": "FileSystemCollection",
     "settings": {
         "root_path": "<path to your local photos folder>"
@@ -102,6 +103,7 @@ Create a collection by `PUT`ting to `/collections` a JSON object like so:
 - `identifier` must be unique
 - `display_name` is optional and defaults to the `identifier` value
 - `schedule` uses the Cron format
+- `enabled` is optional and defaults to `true`
 - `class_name` can only be `FileSystemCollection`
 - `settings` depends on the `class_name` value
 
@@ -143,8 +145,8 @@ The JSON format is:
 ```
 - `identifier` must be unique
 - `display_name` is optional and defaults to the `identifier` value
-- `schedule` uses the Cron format
 - `hostname` is the hostname (optionally with a `:<port>` suffix) where an Affiche instance is running
+- `schedule` uses the Cron format
 - `enabled` is optional and defaults to `true`
 - `filter` is optional and defaults to `"true"`
 

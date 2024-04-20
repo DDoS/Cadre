@@ -115,6 +115,18 @@ Optionally uses [Cru](expo/cru) if it's been built.
 
 Does not support the `favorite` filter.
 
+### Scan
+
+Immediately trigger a collection scan by `POST`ing to `/scan` a JSON object like so:
+```json
+{
+    "identifier": "<collection identifier>",
+    "delay": 0
+}
+```
+- `identifier` is a collection identifier
+- `delay` a delay in seconds (float), is optional and defaults to `0`
+
 ### Schedules
 
 The schedule API uses the same methods as collections, but on the `/schedules` endpoint.

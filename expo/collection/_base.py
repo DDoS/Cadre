@@ -10,6 +10,7 @@ from datetime import datetime
 from importlib import import_module
 from abc import ABCMeta, abstractmethod
 from logging.config import dictConfig
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from croniter import croniter
@@ -22,6 +23,19 @@ from ._filter import Filter
 collection_logger = logging.getLogger('collection')
 
 mp.set_start_method('spawn', True)
+
+
+@dataclass
+class _StopMessage:
+    pass
+
+
+@dataclass
+class _UpdateMessage:
+    delay: float = 0
+
+
+_ProcessMessage = _StopMessage | _UpdateMessage
 
 
 class CollectionProcess:
@@ -88,13 +102,22 @@ class Collection:
                                                                 self._schedule, self._get_process_class(), self._settings))
         self._process.start()
 
+    def manual_update(self, delay: float = 0):
+        if self._process is not None and self._queue is not None:
+            print(delay)
+            self._queue.put(_UpdateMessage(delay))
+
     @abstractmethod
     def get_photo_url(self, db: sqlite3.Connection, id: int) -> str | None:
         raise NotImplementedError()
 
     def stop(self):
-        self._queue.put(True)
+        self._queue.put(_StopMessage())
         self._process.join()
+        self._process = None
+
+        self._queue.close()
+        self._queue = None
 
 
 _collections_by_identifier: None | dict[int, Collection] = None
@@ -302,14 +325,28 @@ def _start_process(message_queue: mp.Queue, photo_db_path: Path, id: int, identi
     logger = logging.getLogger('')
     logger.info(f'Starting {identifier}')
 
+    next_update_time: float | None = None
+    def update_next_update_time(candidate_update_time: float):
+        nonlocal next_update_time
+
+        if next_update_time is not None and next_update_time < time.time():
+            next_update_time = None
+
+        if next_update_time is None or candidate_update_time < next_update_time:
+            next_update_time = candidate_update_time
+            logger.debug(f'Next update: {datetime.fromtimestamp(next_update_time).isoformat()}')
+
     running = True
     def check_running(block: bool = True, timeout: float = None) -> bool:
         nonlocal running
 
         if running:
             try:
-                if message_queue.get(block, timeout):
-                    running = False
+                match message_queue.get(block, timeout):
+                    case _StopMessage():
+                        running = False
+                    case _UpdateMessage(delay):
+                        update_next_update_time(time.time() + delay)
             except queue.Empty:
                 pass
 
@@ -317,16 +354,11 @@ def _start_process(message_queue: mp.Queue, photo_db_path: Path, id: int, identi
 
     schedule_iterator = croniter(schedule)
     def wait_for_next_update():
-        nonlocal running
+        update_next_update_time(schedule_iterator.get_next(start_time=time.time()))
 
-        current_time = datetime.now().astimezone()
-        next_update_time = schedule_iterator.get_next(start_time=current_time)
         while running:
             time_left = next_update_time - time.time()
-            if time_left <= 0:
-                break
-
-            if not check_running(timeout=time_left):
+            if time_left <= 0 or not check_running(timeout=time_left):
                 break
 
         return running

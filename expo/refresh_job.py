@@ -93,7 +93,7 @@ class RefreshJob:
             refresh_job_logger.exception('Failed to post an image to Affiche')
 
 
-    def manual_refresh(self, delay: float):
+    def manual_refresh(self, delay: float = 0):
         if self._job:
             self._job.modify(next_run_time=datetime.now() + timedelta(seconds=delay))
 

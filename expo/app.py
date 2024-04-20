@@ -111,6 +111,27 @@ def refresh():
     return '', 200
 
 
+@app.route('/scan', methods=['POST'])
+def scan():
+    class ScanSchema(Schema):
+        identifier = fields.String(required=True)
+        delay = fields.Number(load_default=0)
+
+    try:
+        result = ScanSchema().load(request.json)
+    except ValidationError as error:
+        return error.messages, 400
+
+    collection = get_collection(result['identifier'])
+    if not collection:
+        return 'No collection for the given identifier', 404
+
+    delay = max(0, float(result['delay']))
+    collection.manual_update(delay)
+
+    return '', 200
+
+
 @app.route('/collections', methods=['PUT', 'GET', 'PATCH', 'DELETE'])
 def collections():
     def collection_to_dict(collection: Collection):

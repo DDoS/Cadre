@@ -21,6 +21,7 @@ expo_logger = logging.getLogger('expo')
 
 SERVER_PATH = Path(__file__).parent
 
+
 dictConfig({
     'version': 1,
     'formatters': {
@@ -63,13 +64,26 @@ dictConfig({
 })
 
 
-PHOTO_DB_PATH = SERVER_PATH / 'photos.db'
-photo_db.setup(PHOTO_DB_PATH)
-init_collections(PHOTO_DB_PATH)
-init_refresh_jobs(PHOTO_DB_PATH)
+def setup_app_config(app: Flask):
+    app.config.from_file("default_config.json", load=json.load)
+    app.config.from_file("config.json", load=json.load, silent=True)
+
+    photo_db_path: Path = SERVER_PATH / app.config['PHOTO_DB_PATH']
+    photo_db_path.parent.mkdir(exist_ok=True)
+    app.config['PHOTO_DB_PATH'] = photo_db_path
+
+
+def start_background_jobs(app: Flask):
+    photo_db_path = app.config['PHOTO_DB_PATH']
+    photo_db.setup(photo_db_path)
+    init_collections(photo_db_path)
+    init_refresh_jobs(photo_db_path)
 
 
 app = Flask(__name__)
+setup_app_config(app)
+start_background_jobs(app)
+
 
 @app.route('/')
 def root():
@@ -135,7 +149,7 @@ def collections():
                 if has_collection(identifier):
                     return 'A collection for the given identifier already exists', 400
 
-                collection = add_collection(PHOTO_DB_PATH, identifier, result.get('display_name', identifier),
+                collection = add_collection(app.config['PHOTO_DB_PATH'], identifier, result.get('display_name', identifier),
                                             result['schedule'], result['class_name'], result['settings'])
                 app.logger.info(f'Added collection "{identifier}"')
                 return collection_to_dict(collection), 200
@@ -155,7 +169,7 @@ def collections():
         return collection_to_dict(collection), 200
 
     if request.method == 'DELETE':
-        remove_collection(PHOTO_DB_PATH, collection)
+        remove_collection(app.config['PHOTO_DB_PATH'], collection)
         app.logger.info(f'Removed collection "{identifier}"')
         return '', 200
 
@@ -173,7 +187,7 @@ def collections():
             return error.messages, 400
 
         try:
-            collection = modify_collection(PHOTO_DB_PATH, collection, result.get('identifier'), result.get('display_name'),
+            collection = modify_collection(app.config['PHOTO_DB_PATH'], collection, result.get('identifier'), result.get('display_name'),
                                            result.get('schedule'), result.get('class_name'), result.get('settings'))
             app.logger.info(f'Modified collection "{identifier}"')
             return collection_to_dict(collection), 200
@@ -222,7 +236,7 @@ def schedules():
                 if has_refresh_job(identifier):
                     return 'A schedule for the given identifier already exists', 400
 
-                job = add_refresh_job(PHOTO_DB_PATH, identifier, result.get('display_name', identifier),
+                job = add_refresh_job(app.config['PHOTO_DB_PATH'], identifier, result.get('display_name', identifier),
                                       result['hostname'], result['schedule'], result['enabled'], result['filter'])
                 app.logger.info(f'Added refresh job "{identifier}"')
                 return refresh_job_to_dict(job), 200
@@ -240,7 +254,7 @@ def schedules():
         return refresh_job_to_dict(job), 200
 
     if request.method == 'DELETE':
-        remove_refresh_job(PHOTO_DB_PATH, job)
+        remove_refresh_job(app.config['PHOTO_DB_PATH'], job)
         app.logger.info(f'Removed refresh job "{identifier}"')
         return '', 200
 
@@ -259,7 +273,7 @@ def schedules():
             return error.messages, 400
 
         try:
-            job = modify_refresh_job(PHOTO_DB_PATH, job, result.get('identifier'), result.get('display_name'),
+            job = modify_refresh_job(app.config['PHOTO_DB_PATH'], job, result.get('identifier'), result.get('display_name'),
                                      result.get('hostname'), result.get('schedule'), result.get('enabled'), result.get('filter'))
             app.logger.info(f'Modified refresh job "{identifier}"')
             return refresh_job_to_dict(job), 200

@@ -4,6 +4,14 @@ from enum import Enum, auto
 from typing import Generator, Union
 
 
+class _TokenKind(Enum):
+    START = auto()
+    END = ()
+    OPERATOR = auto()
+    NUMBER = auto()
+    IDENTIFIER = auto()
+
+
 class Filter:
     __metaclass__ = ABCMeta
 
@@ -26,12 +34,12 @@ def parse_filter(source: str) -> Filter:
 
     expression = _parse_expression(tokens)
 
-    token, indices = next(tokens)
-    match token:
-        case '':
+    token, token_kind, indices = next(tokens)
+    match token_kind:
+        case _TokenKind.END:
             return expression
-        case other:
-            raise ValueError(f'Unknown token from {indices[0]} to {indices[1]}: "{other}"')
+        case _:
+            raise ValueError(f'Unknown token from {indices[0]} to {indices[1]}: "{token}"')
 
 
 class _UnaryOperator(Enum):
@@ -99,6 +107,18 @@ class _BinaryOperation(Filter):
         return f'({self._left_operand}) {token} ({self._right_operand})'
 
 
+class _BoolLiteral(Filter):
+    def __init__(self, source: tuple[int, int], value: bool):
+        super().__init__(source)
+        self._value = value
+
+    def to_sql(self) -> str:
+        return '1' if self._value else '0'
+
+    def __str__(self) -> str:
+        return 'true' if self._value else 'false'
+
+
 class _NamedAspect(Enum):
     LANDSCAPE = auto()
     PORTRAIT = auto()
@@ -146,23 +166,23 @@ class _Favorite(Filter):
         return 'favorite'
 
 
-class _BoolLiteral(Filter):
-    def __init__(self, source: tuple[int, int], value: bool):
+class _IdentifierSet(Filter):
+    def __init__(self, source: tuple[int, int], identifiers: set[str]):
         super().__init__(source)
-        self._value = value
+        self._identifiers = identifiers
 
     def to_sql(self) -> str:
-        return '1' if self._value else '0'
+        return " OR ".join(f'collections.identifier = "{identifier}"' for identifier in self._identifiers)
 
     def __str__(self) -> str:
-        return 'true' if self._value else 'false'
+        return f'{{{" ".join(self._identifiers)}}}'
 
 
-Tokenizer = Generator[tuple[str, tuple[int, int]], bool | None, None]
+Tokenizer = Generator[tuple[str, _TokenKind, tuple[int, int]], bool | None, None]
 def _split_tokens(source: str) -> Tokenizer:
     separator_chars = string.whitespace
-    operator_chars = '()'
-    operator_set = {'(', ')'}
+    operator_set = {'(', ')', '{', '}'}
+    operator_chars = set(''.join(operator_set))
     number_chars = string.digits
     identifier_start_chars = string.ascii_letters
     identifier_continue_chars = identifier_start_chars + number_chars
@@ -179,7 +199,7 @@ def _split_tokens(source: str) -> Tokenizer:
 
         return consume_char(end, token_chars)
 
-    repeat_next = yield '', (start, end)
+    repeat_next = yield '', _TokenKind.START, (start, end)
 
     while True:
         while consume_char(start, separator_chars):
@@ -193,12 +213,15 @@ def _split_tokens(source: str) -> Tokenizer:
         if source[end] in operator_chars:
             token_chars = operator_chars
             token_set = operator_set
+            token_kind = _TokenKind.OPERATOR
         elif source[end] in number_chars:
             token_chars = number_chars
+            token_kind = _TokenKind.NUMBER
         elif source[end] in identifier_start_chars:
             token_chars = identifier_continue_chars
+            token_kind = _TokenKind.IDENTIFIER
         else:
-            raise ValueError(f'Invalid character at index {end}: "{ord(source[end])}"')
+            raise ValueError(f'Invalid character at index {end}: 0x{ord(source[end]):X}')
         end += 1
 
         while continue_token(token_chars, token_set):
@@ -206,14 +229,14 @@ def _split_tokens(source: str) -> Tokenizer:
 
         while True:
             repeat = repeat_next
-            repeat_next = yield source[start:end], (start, end)
+            repeat_next = yield source[start:end], token_kind, (start, end)
             if not repeat:
                 break
 
         start = end
 
     while True:
-        yield '', (start, end)
+        yield '', _TokenKind.END, (start, end)
 
 
 _Atom = _Aspect | _Favorite | _BoolLiteral | Union['_Expression']
@@ -229,7 +252,7 @@ def _parse_expression(tokens: Tokenizer) -> _Expression:
 
 def _parse_or(tokens: Tokenizer) -> _Or:
     def parse_or_right(tokens: Tokenizer, left_operand: _Unary) -> _Or:
-        token, indices = tokens.send(True)
+        token, _, indices = tokens.send(True)
         match token:
             case 'or':
                 _ = next(tokens)
@@ -245,7 +268,7 @@ def _parse_or(tokens: Tokenizer) -> _Or:
 
 def _parse_and(tokens: Tokenizer) -> _And:
     def parse_and_right(tokens: Tokenizer, left_operand: _Unary) -> _And:
-        token, indices = tokens.send(True)
+        token, _, indices = tokens.send(True)
         match token:
             case 'and':
                 _ = next(tokens)
@@ -260,7 +283,7 @@ def _parse_and(tokens: Tokenizer) -> _And:
 
 
 def _parse_unary(tokens: Tokenizer) -> _Unary:
-    token, indices = tokens.send(True)
+    token, _, indices = tokens.send(True)
     match token:
         case 'not':
             _ = next(tokens)
@@ -271,7 +294,7 @@ def _parse_unary(tokens: Tokenizer) -> _Unary:
 
 
 def _parse_atom(tokens: Tokenizer) -> _Atom:
-    token, indices = next(tokens)
+    token, _, indices = next(tokens)
     match token:
         case 'landscape':
             return _Aspect(indices, _NamedAspect.LANDSCAPE)
@@ -287,11 +310,25 @@ def _parse_atom(tokens: Tokenizer) -> _Atom:
             return _BoolLiteral(indices, False)
         case '(':
             expression = _parse_expression(tokens)
-            token, indices = next(tokens)
+            token, _, indices = next(tokens)
             match token:
                 case ')':
                     return expression
                 case other:
                     raise ValueError(f'Expected ")" at position {indices[0]}, but got "{other}"')
+        case '{':
+            identifiers = set()
+            while True:
+                token, token_kind, indices = next(tokens)
+                match token, token_kind:
+                    case [identifier, _TokenKind.IDENTIFIER]:
+                        identifiers.add(identifier)
+                    case ['}', _]:
+                        if not identifiers:
+                            raise ValueError(f'Expected identifier an at position {indices[0]}, but got "}}"')
+
+                        return _IdentifierSet(indices, identifiers)
+                    case _:
+                        raise ValueError(f'Expected an identifier or "}}" at position {indices[0]}, but got "{other}"')
         case other:
             raise ValueError(f'Unknown token from {indices[0]} to {indices[1]}: "{other}"')

@@ -1,4 +1,5 @@
 import sqlite3
+import re
 from pathlib import Path, PurePosixPath
 from datetime import datetime
 
@@ -8,6 +9,9 @@ sqlite3.register_converter('datetime', lambda dt: datetime.fromisoformat(dt.deco
 
 sqlite3.register_adapter(PurePosixPath, lambda path: str(path))
 sqlite3.register_converter('path', lambda path: PurePosixPath(path.decode()))
+
+
+_identifier_pattern = re.compile('[A-Za-z_][A-Za-z0-9_]*')
 
 
 def open(path: Path) -> sqlite3.Connection:
@@ -30,3 +34,7 @@ def setup(path: Path | str):
                    'collections(id) ON DELETE CASCADE, display_date TEXT, format TEXT, width INTEGER, height INTEGER, '
                    'favorite INTEGER, capture_date TEXT)')
     db.close()
+
+
+def validate_identifier(identifier: str) -> bool:
+    return _identifier_pattern.fullmatch(identifier) is not None

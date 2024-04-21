@@ -178,9 +178,9 @@ def collections():
                 return collection_to_dict(collection), 200
             except ValidationError as error:
                 return error.messages, 400
-            except Exception:
+            except Exception as error:
                 app.logger.debug('Invalid arguments', exc_info=True)
-                return 'Invalid arguments', 400
+                return getattr(error, 'message', str(error)), 400
 
         return 'Parameter "identifier" required', 400
 
@@ -215,9 +215,9 @@ def collections():
                                            result.get('schedule'), result.get('enabled'), result.get('class_name'), result.get('settings'))
             app.logger.info(f'Modified collection "{identifier}"')
             return collection_to_dict(collection), 200
-        except Exception:
+        except Exception as error:
             app.logger.debug('Invalid arguments', exc_info=True)
-            return 'Invalid arguments', 400
+            return getattr(error, 'message', str(error)), 400
 
 
 @app.route('/schedules', methods=['PUT', 'GET', 'PATCH', 'DELETE'])
@@ -264,9 +264,9 @@ def schedules():
                                       result['hostname'], result['schedule'], result['enabled'], result['filter'])
                 app.logger.info(f'Added refresh job "{identifier}"')
                 return refresh_job_to_dict(job), 200
-            except Exception:
+            except Exception as error:
                 app.logger.debug('Invalid arguments', exc_info=True)
-                return 'Invalid arguments', 400
+                return getattr(error, 'message', str(error)), 400
 
         return 'Parameter "identifier" required', 400
 
@@ -301,6 +301,6 @@ def schedules():
                                      result.get('hostname'), result.get('schedule'), result.get('enabled'), result.get('filter'))
             app.logger.info(f'Modified refresh job "{identifier}"')
             return refresh_job_to_dict(job), 200
-        except Exception:
+        except Exception as error:
             app.logger.debug('Invalid arguments', exc_info=True)
-            return 'Invalid arguments', 400
+            return getattr(error, 'message', str(error)), 400

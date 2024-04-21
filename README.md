@@ -100,7 +100,7 @@ Create a collection by `PUT`ting to `/collections` a JSON object like so:
     }
 }
 ```
-- `identifier` must be unique
+- `identifier` must be unique, contain only characters in the set `[A-Za-z0-9_]`, and cannot start with a number
 - `display_name` is optional and defaults to the `identifier` value
 - `schedule` uses the Cron format
 - `enabled` is optional and defaults to `true`
@@ -143,7 +143,7 @@ The JSON format is:
     "filter": "<filter expression>"
 }
 ```
-- `identifier` must be unique
+- `identifier` must be unique, contain only characters in the set `[A-Za-z0-9_]`, and cannot start with a number
 - `display_name` is optional and defaults to the `identifier` value
 - `hostname` is the hostname (optionally with a `:<port>` suffix) where an Affiche instance is running
 - `schedule` uses the Cron format
@@ -155,10 +155,12 @@ The JSON format is:
 The filter EBNF grammar is:
 ```ebnf
 bool literal = "false" | "true";
+identifier = ? /[A-Za-z_][A-Za-z0-9_]*/ ?;
 favorite = "favorite";
 aspect = "landscape" | "portrait" | "square";
+collection set = "{", identifier, {identifier}, "}";
 parenthesized expression = "(", expression, ")";
-atom = bool literal | favorite | aspect | parenthesized expression;
+atom = bool literal | favorite | aspect | collection set | parenthesized expression;
 
 unary = ["not"], atom;
 and = unary, ["and", unary];
@@ -169,8 +171,13 @@ expression = or;
 
 In simple terms this means you can use the `favorite` (unused), `landscape`, `portrait` and `square`
 predicates to write a logical expression for filtering photos. You can use the `()`, `not`, `and`, and `or`
-operators to build your expression (listed in decreasing order of precedence). The `true` and `false`
-literals are also available: if you simply want to allow all photos use `true`.
+operators to build your expression (listed in decreasing order of precedence). To filter by collection,
+use `{<identifier 1> <identifier 2> ...}`. A photo will only be picked if it belongs to one of the given
+collections. The `true` and `false` literals are also available.
+
+Example: `portrait and (favorite or not {phone_pics family_pics})`
+
+If you simply want to allow all photos use: `true`
 
 ### Refresh
 

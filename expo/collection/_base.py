@@ -57,6 +57,12 @@ class Collection:
     @abstractmethod
     def __init__(self, id: int | None, identifier: str, display_name: str,
                  schedule: str, enabled: bool, settings: dict[str, Any]):
+        if not photo_db.validate_identifier(identifier):
+            raise ValueError('Invalid identifier')
+
+        if errors := self._get_settings_schema()().validate(settings):
+            raise ValidationError(errors, data=settings)
+
         self._id = id
         self._identifier = identifier
         self._display_name = display_name
@@ -65,9 +71,6 @@ class Collection:
         self._enabled = enabled
         self._queue = None
         self._process = None
-
-        if errors := self._get_settings_schema()().validate(self._settings):
-            raise ValidationError(errors, data=self._settings)
 
     @property
     def identifier(self):
@@ -192,6 +195,8 @@ def init_collections(photo_db_path: Path):
             class_name = row[5]
             CollectionClass = _collection_class_from_name(class_name)
             collections.append(CollectionClass(row[0], row[1], row[2], row[3], bool(row[4]), json.loads(row[6])))
+    except Exception:
+        collection_logger.exception('Invalid collection in the photo DB')
     finally:
         db.close()
 
@@ -258,7 +263,6 @@ def modify_collection(photo_db_path: Path, collection: Collection, identifier: s
         settings = collection.settings
 
     collection.stop()
-    del _collections_by_identifier[collection.identifier]
 
     try:
         db = photo_db.open(photo_db_path)
@@ -291,6 +295,7 @@ def get_new_photo_url(photo_db_path: Path, filter: Filter) -> str | None:
     try:
         db = photo_db.open(photo_db_path)
         sql_filter = filter.to_sql()
+        collection_logger.debug(f'Generated SQLite filter: "{sql_filter}"')
         # Nested SELECT query for random selection is much faster: https://stackoverflow.com/a/24591696
         row = db.execute('SELECT id, collection_id FROM (SELECT id, collection_id, display_date FROM photos WHERE id IN '
                          '(SELECT photos.id FROM photos INNER JOIN collections ON collections.id = photos.collection_id WHERE '

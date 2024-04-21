@@ -27,6 +27,9 @@ atexit.register(lambda: refresh_scheduler.shutdown())
 class RefreshJob:
     def __init__(self, id: int | None, identifier: str, display_name: str,
                  hostname: str, schedule: str, enabled: bool, filter: str | Filter):
+        if not photo_db.validate_identifier(identifier):
+            raise ValueError('Invalid identifier')
+
         self._id = id
         self._identifier = identifier
         self._display_name = display_name
@@ -181,6 +184,8 @@ def init_refresh_jobs(photo_db_path: Path):
         for row in db.execute('SELECT id, identifier, display_name, hostname, '
                               'schedule, enabled, filter FROM refresh_jobs'):
             refresh_jobs.append(RefreshJob(row[0], row[1], row[2], row[3], row[4], bool(row[5]), row[6]))
+    except Exception:
+        refresh_job_logger.exception('Invalid refresh job in the photo DB')
     finally:
         db.close()
 
@@ -247,7 +252,6 @@ def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str = N
         filter = job.filter
 
     job.stop()
-    del _refresh_jobs_by_identifier[job.identifier]
 
     try:
         db = photo_db.open(photo_db_path)

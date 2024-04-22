@@ -1,3 +1,4 @@
+import inspect
 import sqlite3
 import queue
 import time
@@ -14,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from croniter import croniter
-from marshmallow import Schema, ValidationError
+from marshmallow import Schema, ValidationError, fields
 
 import photo_db
 from ._filter import Filter
@@ -60,7 +61,7 @@ class Collection:
         if not photo_db.validate_identifier(identifier):
             raise ValueError('Invalid identifier')
 
-        if errors := self._get_settings_schema()().validate(settings):
+        if errors := self.__class__.get_settings_schema().validate(settings):
             raise ValidationError(errors, data=settings)
 
         self._id = id
@@ -99,21 +100,30 @@ class Collection:
     def _set_id(self, id: int):
         self._id = id
 
+    @staticmethod
     @abstractmethod
-    def _get_settings_schema(self) -> type[Schema]:
+    def get_settings_schema() -> Schema:
         raise NotImplementedError()
 
+    @staticmethod
     @abstractmethod
-    def _get_process_class(self) -> type[CollectionProcess]:
+    def get_settings_default() -> dict[str, Any]:
+        raise NotImplementedError()
+
+    @staticmethod
+    @abstractmethod
+    def _get_process_class() -> type[CollectionProcess]:
         raise NotImplementedError()
 
     def start(self, photo_db_path: Path):
         if not self._enabled:
             raise ValueError('Can\'t start a disabled collection')
 
+        process_class = self.__class__._get_process_class()
+
         self._queue = mp.Queue()
         self._process = mp.Process(target=_start_process, args=(self._queue, photo_db_path, self._id, self._identifier,
-                                                                self._schedule, self._get_process_class(), self._settings))
+                                                                self._schedule, process_class, self._settings))
         self._process.start()
 
     def manual_update(self, delay: float = 0):
@@ -134,16 +144,82 @@ class Collection:
         self._queue = None
 
 
-_collections_by_identifier: None | dict[int, Collection] = None
+class DummyCollectionProcess(CollectionProcess):
+    def __init__(self, id: int, identifier: str):
+        super().__init__(id, identifier)
+
+    def update(self, db: sqlite3.Connection, cancellation_check: Callable[[], bool]):
+        pass
+
+
+class DummyCollection(Collection):
+    def __init__(self, id: int, identifier: str, display_name: str,
+                 schedule: str, enabled: bool, settings: dict[str, Any]):
+        super().__init__(id, identifier, display_name, schedule, enabled, settings)
+
+    @staticmethod
+    def get_settings_schema():
+        class SettingsSchema(Schema):
+            class Inner(Schema):
+                numbers = fields.List(fields.Float())
+                boolean = fields.DateTime()
+
+            text = fields.String()
+            inner = fields.Nested(Inner)
+
+        return SettingsSchema()
+
+    @staticmethod
+    def get_settings_default():
+        return {
+            'text': 'test',
+            'inner': {
+                'numbers': [3, 39],
+                'boolean': True
+            }
+        }
+
+    @staticmethod
+    def _get_process_class():
+        return DummyCollectionProcess
+
+    def get_photo_url(self, db: sqlite3.Connection, id: int):
+        return None
+
+
+_collection_classes_by_name: dict[str, type[Collection]] | None = None
+
+
+def _get_collection_classes() -> dict[str, type[Collection]]:
+    global _collection_classes_by_name
+
+    if _collection_classes_by_name is None:
+        _collection_classes_by_name = dict()
+        class_module = import_module('collection')
+        classes = inspect.getmembers(class_module, inspect.isclass)
+        for name, class_ in classes:
+            if issubclass(class_, Collection) and class_ != Collection:
+                _collection_classes_by_name[name] = class_
+
+    return _collection_classes_by_name
+
+
+def get_collection_class_names() -> dict[str]:
+    return _get_collection_classes().keys()
 
 
 def _collection_class_from_name(class_name: str) -> type[Collection]:
+    return _get_collection_classes()[class_name]
+
+
+def get_collection_settings_schema(class_name: str) -> Schema | None:
     try:
-        class_module = import_module('collection')
-        return getattr(class_module, class_name)
-    except Exception:
-        collection_logger.exception(f'Invalid class name: {class_name}')
-        raise
+        return _collection_class_from_name(class_name).get_settings_schema()
+    except KeyError:
+        return None
+
+
+_collections_by_identifier: None | dict[int, Collection] = None
 
 
 def _create_collection(db: sqlite3.Connection, id: int | None, identifier: str, display_name: str,
@@ -246,7 +322,8 @@ def add_collection(photo_db_path: Path, identifier: str, display_name: str,
 
 def modify_collection(photo_db_path: Path, collection: Collection, identifier: str = None, display_name: str = None,
                       schedule: str = None, enabled: bool = None, class_name: str = None, settings: dict[str, Any] = None) -> Collection:
-    if identifier in _collections_by_identifier:
+    old_identifier = collection.identifier
+    if identifier is not None and identifier != old_identifier and identifier in _collections_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
     if identifier is None:
@@ -267,11 +344,14 @@ def modify_collection(photo_db_path: Path, collection: Collection, identifier: s
     try:
         db = photo_db.open(photo_db_path)
         collection = _create_collection(db, collection._id, identifier, display_name, schedule, enabled, class_name, settings)
-        collection_logger.info(f'Modified "{collection.identifier}"')
+        collection_logger.info(f'Modified "{identifier}"')
     finally:
         db.close()
 
     _collections_by_identifier[collection.identifier] = collection
+    if collection.identifier != old_identifier:
+        del _collections_by_identifier[old_identifier]
+
     if collection.enabled:
         collection.start(photo_db_path)
 

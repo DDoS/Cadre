@@ -2,7 +2,7 @@ import os
 import random
 import logging
 import sqlite3
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Any, Callable, Generator
 from datetime import datetime, timedelta
 from dataclasses import dataclass
@@ -106,10 +106,14 @@ def _try_load_image_info(path: PurePosixPath) -> ImageInfo | None:
         return None
 
 
+def _get_real_path(pure_path: PurePath | str) -> Path:
+    return Path(pure_path).expanduser().resolve()
+
+
 class FileSystemCollectionProcess(CollectionProcess):
     def __init__(self, id: int, identifier: str, root_path: PurePosixPath | str):
         super().__init__(id, identifier)
-        self._root_path = PurePosixPath(root_path)
+        self._root_path = _get_real_path(root_path)
 
     def update(self, db: sqlite3.Connection, cancellation_check: Callable[[], bool]):
         with db:
@@ -129,7 +133,7 @@ class FileSystemCollectionProcess(CollectionProcess):
                 logger.info(f'Scan was cancelled')
                 break
 
-            local_path = PurePosixPath(entry.path).relative_to(self._root_path)
+            local_path = Path(entry.path).relative_to(self._root_path)
             modified_date = datetime.fromtimestamp(os.path.getmtime(entry.path)).astimezone()
             existing_data = db.execute('SELECT photo_id, modified_date as "d [datetime]" FROM fs_collections_data WHERE collection_id = ? AND path = ?',
                                        (self._id, local_path)).fetchone()
@@ -188,15 +192,26 @@ class FileSystemCollection(Collection):
     def __init__(self, id: int, identifier: str, display_name: str,
                  schedule: str, enabled: bool, settings: dict[str, Any]):
         super().__init__(id, identifier, display_name, schedule, enabled, settings)
-        self._root_path = PurePosixPath(settings['root_path'])
+        self._root_path = _get_real_path(self.settings['root_path'])
 
-    def _get_settings_schema(self):
+    @staticmethod
+    def get_settings_schema():
         class SettingsSchema(Schema):
-            root_path = fields.String(required=True)
+            class Meta:
+                ordered = True
 
-        return SettingsSchema
+            root_path = fields.String(required=True, metadata={'title': 'Path'})
 
-    def _get_process_class(self):
+        return SettingsSchema()
+
+    @staticmethod
+    def get_settings_default():
+        return {
+            'root_path': '~/photos'
+        }
+
+    @staticmethod
+    def _get_process_class():
         return FileSystemCollectionProcess
 
     def get_photo_url(self, db: sqlite3.Connection, id: int):
@@ -205,5 +220,5 @@ class FileSystemCollection(Collection):
             logger.error(f'No photo in collection {self.identifier} with id {id}')
             return None
 
-        path, = row
-        return (self._root_path / path).as_uri()
+        local_path, = row
+        return (self._root_path / local_path).as_uri()

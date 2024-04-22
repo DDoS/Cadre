@@ -235,7 +235,8 @@ def add_refresh_job(photo_db_path: Path, identifier: str, display_name: str,
 
 def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str = None, display_name: str = None,
                        hostname: str = None, schedule: str = None, enabled: bool = None, filter: str | Filter = None) -> RefreshJob:
-    if identifier in _refresh_jobs_by_identifier:
+    old_identifier = job.identifier
+    if identifier is not None and identifier != old_identifier and identifier in _refresh_jobs_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
     if identifier is None:
@@ -256,11 +257,14 @@ def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str = N
     try:
         db = photo_db.open(photo_db_path)
         job = _create_refresh_job(db, job._id, identifier, display_name, hostname, schedule, enabled, filter)
-        refresh_job_logger.info(f'Modified "{job.identifier}"')
+        refresh_job_logger.info(f'Modified "{identifier}"')
     finally:
         db.close()
 
     _refresh_jobs_by_identifier[job.identifier] = job
+    if job.identifier != old_identifier:
+        del _refresh_jobs_by_identifier[old_identifier]
+
     if job.enabled:
         job.start(photo_db_path)
 

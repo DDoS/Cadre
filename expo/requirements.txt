@@ -4,3 +4,4 @@ APScheduler
 requests
 pyvips
 marshmallow
+marshmallow-jsonschema

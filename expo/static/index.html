@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en">
+    <head>
+        <link rel="stylesheet" href="static/index.css">
+        <script src="static/third_party/jsoneditor.js"></script>
+        <script type="module">
+            const fetchJson = async (endpoint, defaultValue) =>
+            {
+                const response = await fetch(new Request(endpoint));
+                return response.ok ? await response.json() : defaultValue;
+            };
+            const schedules = await fetchJson("/schedules", []);
+            const collections = await fetchJson("/collections", []);
+
+            const scheduleDefaultValue = await fetchJson("default/schedule.json", null);
+            const collectionDefaultValue = await fetchJson("default/collection.json", null);
+
+            JSONEditor.defaults.options.theme = 'barebones';
+            JSONEditor.defaults.options.show_errors = 'change';
+            JSONEditor.defaults.options.disable_edit_json = true;
+            JSONEditor.defaults.options.disable_properties = true;
+            JSONEditor.defaults.options.disable_collapse = true;
+            JSONEditor.defaults.options.no_additional_properties = true;
+
+            const makePropertyEditor = async (schemaUrl, editorId) => {
+                const response = await fetch(new Request(schemaUrl));
+                if (!response.ok) {
+                    return null;
+                }
+
+                const schema = await response.json();
+                const editor = new JSONEditor(document.getElementById(editorId), {schema: schema});
+                return new Promise(function (resolve, reject) {
+                    editor.on('ready', () => {
+                        editor.off('ready');
+                        resolve(editor);
+                    });
+                });
+            };
+
+            let settingsEditorPromise = null;
+            let originalSettingsClassName = null;
+            let originalSettingsValue = null;
+            const classNamePath = "root.class_name";
+            const updateCollectionSettingsEditor = async () => {
+                const className = collectionEditor.getEditor(classNamePath).getValue();
+
+                if (settingsEditorPromise !== null && settingsEditorPromise.className !== className) {
+                    const oldSettingsEditorPromise = settingsEditorPromise;
+                    settingsEditorPromise = null;
+                    (await oldSettingsEditorPromise).destroy();
+                }
+
+                if (settingsEditorPromise === null) {
+                    settingsEditorPromise = makePropertyEditor(`schema/${className}/settings.json`, "settings-editor");
+                    settingsEditorPromise.className = className;
+                }
+
+                if (originalSettingsClassName === className && originalSettingsValue !== null) {
+                    (await settingsEditorPromise).setValue(originalSettingsValue);
+                }
+            };
+
+            const scheduleEditor = await makePropertyEditor("schema/schedule.json", "schedule-editor");
+            const collectionEditor = await makePropertyEditor("schema/collection.json", "collection-editor");
+            collectionEditor.watch(classNamePath, updateCollectionSettingsEditor);
+
+            const findItemByIdentifier = (list, identifier) => list.find(item => item.identifier === identifier);
+            const findItemIndexByIdentifier = (list, identifier) =>  list.findIndex(item => item.identifier === identifier);
+
+            const setScheduleEditorValue = schedule => {
+                if (schedule !== undefined) {
+                    scheduleEditor.setValue(schedule);
+                }
+            };
+            const setCollectionEditorValue = async collection => {
+                if (collection !== undefined) {
+                    collection = {...collection};
+                    originalSettingsClassName = collection.class_name;
+                    originalSettingsValue = collection.settings;
+                    collection.settings = undefined;
+                    collectionEditor.setValue(collection);
+                    await updateCollectionSettingsEditor()
+                }
+            };
+
+            const scheduleList = document.getElementById("schedule-list");
+            const collectionList = document.getElementById("collection-list");
+            scheduleList.addEventListener("change", event =>
+                    setScheduleEditorValue(findItemByIdentifier(schedules, event.target.value)));
+            collectionList.addEventListener("change", event =>
+                    setCollectionEditorValue(findItemByIdentifier(collections, event.target.value)));
+
+            const fillListBox = (list, items) =>
+            {
+                list.length = 0;
+                for (const [index, collection] of items.entries()) {
+                    list.add(new Option(collection.display_name || collection.identifier, collection.identifier));
+                }
+
+                if (list.length > 0) {
+                    list.selectedIndex = 0;
+                    list.dispatchEvent(new Event('change'));
+                }
+            };
+            fillListBox(scheduleList, schedules);
+            fillListBox(collectionList, collections);
+
+            const scheduleAddButton = document.getElementById("schedule-add-button")
+            const scheduleRemoveButton = document.getElementById("schedule-remove-button")
+            const scheduleSaveButton = document.getElementById("schedule-save-button");
+            scheduleAddButton.addEventListener("click", () => {
+                setScheduleEditorValue(scheduleDefaultValue);
+                scheduleList.selectedIndex = -1;
+                scheduleList.dispatchEvent(new Event('change'));
+            });
+            scheduleRemoveButton.addEventListener("click", async () => {
+                const index = findItemIndexByIdentifier(schedules, scheduleList.value);
+                if (index < 0) {
+                    return;
+                }
+
+                const schedule = schedules[index];
+                const response = await fetch(new Request(`/schedules?identifier=${schedule.identifier}`, {method: "DELETE"}));
+                if (!response.ok) {
+                    alert(`Error: ${await response.text()}`);
+                    return;
+                }
+
+                schedules.splice(index, 1);
+                scheduleList.remove(index);
+                if (scheduleList.length > 0) {
+                    scheduleList.selectedIndex = Math.max(0, index - 1);
+                } else {
+                    scheduleList.selectedIndex = -1;
+                    setScheduleEditorValue(scheduleDefaultValue);
+                }
+
+                scheduleList.dispatchEvent(new Event('change'));
+            });
+            scheduleSaveButton.addEventListener("click", async () => {
+                const errors = scheduleEditor.validate();
+                if (errors.length > 0) {
+                    alert("Errors must be fixed first.");
+                    return;
+                }
+
+                let schedule = scheduleEditor.getValue();
+
+                const oldIdentifier = scheduleList.value;
+                const index = schedules.findIndex(item => item.identifier === oldIdentifier);
+                const response = await fetch(index >= 0 ?
+                    new Request(`/schedules?identifier=${oldIdentifier}`,
+                    {
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(schedule),
+                        method: "PATCH"
+                    }) :
+                    new Request(`/schedules`,
+                    {
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(schedule),
+                        method: "PUT"
+                    })
+                );
+
+                if (!response.ok) {
+                    alert(`Error: ${await response.text()}`);
+                    return;
+                }
+
+                schedule = await response.json();
+                if (index >= 0) {
+                    schedules[index] = schedule;
+                    const option = scheduleList.item(index);
+                    option.value = schedule.identifier;
+                    option.text = schedule.display_name || schedule.identifier;
+                } else {
+                    schedules.push(schedule);
+                    scheduleList.add(new Option(schedule.display_name || schedule.identifier, schedule.identifier));
+                    scheduleList.selectedIndex = scheduleList.length - 1;
+                }
+
+                scheduleList.dispatchEvent(new Event('change'));
+            });
+
+            const collectionAddButton = document.getElementById("collection-add-button")
+            const collectionRemoveButton = document.getElementById("collection-remove-button")
+            const collectionSaveButton = document.getElementById("collection-save-button");
+            collectionAddButton.addEventListener("click", async () => {
+                await setCollectionEditorValue(collectionDefaultValue);
+                collectionList.selectedIndex = -1;
+                collectionList.dispatchEvent(new Event('change'));
+            });
+            collectionRemoveButton.addEventListener("click", async () => {
+                const index = findItemIndexByIdentifier(collections, collectionList.value);
+                if (index < 0) {
+                    return;
+                }
+
+                const collection = collections[index];
+                const response = await fetch(new Request(`/collections?identifier=${collection.identifier}`, {method: "DELETE"}));
+                if (!response.ok) {
+                    alert(`Error: ${await response.text()}`);
+                    return;
+                }
+
+                collections.splice(index, 1);
+                collectionList.remove(index);
+                if (collectionList.length > 0) {
+                    collectionList.selectedIndex = Math.max(0, index - 1);
+                } else {
+                    collectionList.selectedIndex = -1;
+                    await setCollectionEditorValue(collectionDefaultValue);
+                }
+
+                collectionList.dispatchEvent(new Event('change'));
+            });
+            collectionSaveButton.addEventListener("click", async () => {
+                if (settingsEditorPromise === null) {
+                    return;
+                }
+
+                const settingsEditor = await settingsEditorPromise;
+
+                const errors = collectionEditor.validate().concat(settingsEditor.validate());
+                if (errors.length > 0) {
+                    alert("Errors must be fixed first.");
+                    return;
+                }
+
+                let collection = collectionEditor.getValue();
+                collection.settings = settingsEditor.getValue();
+
+                const oldIdentifier = collectionList.value;
+                const index = collections.findIndex(item => item.identifier === oldIdentifier);
+                const response = await fetch(index >= 0 ?
+                    new Request(`/collections?identifier=${oldIdentifier}`,
+                    {
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(collection),
+                        method: "PATCH"
+                    }) :
+                    new Request(`/collections`,
+                    {
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(collection),
+                        method: "PUT"
+                    })
+                );
+
+                if (!response.ok) {
+                    alert(`Error: ${await response.text()}`);
+                    return;
+                }
+
+                collection = await response.json();
+                if (index >= 0) {
+                    collections[index] = collection;
+                    const option = collectionList.item(index);
+                    option.value = collection.identifier;
+                    option.text = collection.display_name || collection.identifier;
+                } else {
+                    collections.push(collection);
+                    collectionList.add(new Option(collection.display_name || collection.identifier, collection.identifier));
+                    collectionList.selectedIndex = collectionList.length - 1;
+                }
+
+                collectionList.dispatchEvent(new Event('change'));
+            });
+        </script>
+    </head>
+    <body>
+        <div class="expo-main-container">
+            <div class="expo-title">Expo</div>
+            <div class="expo-content">
+                <div class="expo-content-item">
+                    <div class="expo-item-title">Schedules</div>
+                    <div class="expo-list-and-properties" >
+                        <div class="expo-list">
+                            <select class="expo-list__select" id="schedule-list" name="schedules" size="5"></select>
+                            <div class="expo-list__add-remove">
+                                <button class="expo-list__button" id="schedule-add-button">+</button>
+                                <button class="expo-list__button" id="schedule-remove-button">-</button>
+                            </div>
+                        </div>
+                        <div class="expo-property-group">
+                            <div class="expo-properties" id="schedule-editor"></div>
+                            <button class="expo-property-group__save-button" id="schedule-save-button">Save</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="expo-content-item">
+                    <div class="expo-item-title">Collections</div>
+                    <div class="expo-list-and-properties" >
+                        <div class="expo-list">
+                            <select class="expo-list__select" id="collection-list" name="collections" size="5"></select>
+                            <div class="expo-list__add-remove">
+                                <button class="expo-list__button" id="collection-add-button">+</button>
+                                <button class="expo-list__button" id="collection-remove-button">-</button>
+                            </div>
+                        </div>
+                        <div class="expo-property-group">
+                            <div class="expo-properties" id="collection-editor"></div>
+                            <div class="expo-properties" id="settings-editor"></div>
+                            <button class="expo-property-group__save-button" id="collection-save-button">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

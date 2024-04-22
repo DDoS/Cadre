@@ -5,6 +5,8 @@ from logging.config import dictConfig
 
 from flask import Flask, request
 from marshmallow import Schema, fields, ValidationError
+from marshmallow.validate import OneOf, Regexp
+from marshmallow_jsonschema import JSONSchema
 
 import photo_db
 from collection import *
@@ -65,8 +67,8 @@ dictConfig({
 
 
 def setup_app_config(app: Flask):
-    app.config.from_file("default_config.json", load=json.load)
-    app.config.from_file("config.json", load=json.load, silent=True)
+    app.config.from_file('default_config.json', load=json.load)
+    app.config.from_file('config.json', load=json.load, silent=True)
 
     photo_db_path: Path = SERVER_PATH / app.config['PHOTO_DB_PATH']
     photo_db_path.parent.mkdir(exist_ok=True)
@@ -81,13 +83,14 @@ def start_background_jobs(app: Flask):
 
 
 app = Flask(__name__)
+app.json.sort_keys = False
 setup_app_config(app)
 start_background_jobs(app)
 
 
 @app.route('/')
 def root():
-    return 'Expo', 200
+    return app.send_static_file('index.html')
 
 
 @app.route('/refresh', methods=['POST'])
@@ -132,6 +135,20 @@ def scan():
     return '', 200
 
 
+class CollectionSchema(Schema):
+    class Meta:
+        ordered = True
+
+    identifier = fields.String(required=True, validate=Regexp(photo_db.identifier_pattern),
+                               metadata={'title': 'Identifier'})
+    display_name = fields.String(load_default='', metadata={'title': 'Name'})
+    schedule = fields.String(required=True, metadata={'title': 'Schedule'})
+    enabled = fields.Boolean(load_default=True, metadata={'title': 'Enabled'})
+    class_name = fields.String(required=True, validate=OneOf(get_collection_class_names()),
+                               metadata={'title': 'Class name'})
+    settings = fields.Dict(load_default={}, metadata={'title': 'Settings'})
+
+
 @app.route('/collections', methods=['PUT', 'GET', 'PATCH', 'DELETE'])
 def collections():
     def collection_to_dict(collection: Collection):
@@ -154,16 +171,8 @@ def collections():
             return response, 200
 
         if request.method == 'PUT':
-            class PutCollectionSchema(Schema):
-                identifier = fields.String(required=True)
-                display_name = fields.String()
-                schedule = fields.String(required=True)
-                enabled = fields.Boolean(load_default=True)
-                class_name = fields.String(required=True)
-                settings = fields.Dict(load_default={})
-
             try:
-                result = PutCollectionSchema().load(request.json)
+                result = CollectionSchema().load(request.json)
             except ValidationError as error:
                 return error.messages, 400
 
@@ -172,7 +181,11 @@ def collections():
                 if has_collection(identifier):
                     return 'A collection for the given identifier already exists', 400
 
-                collection = add_collection(app.config['PHOTO_DB_PATH'], identifier, result.get('display_name', identifier),
+                display_name = result.get('display_name')
+                if not display_name:
+                    display_name = identifier
+
+                collection = add_collection(app.config['PHOTO_DB_PATH'], identifier, display_name,
                                             result['schedule'], result['enabled'], result['class_name'], result['settings'])
                 app.logger.info(f'Added collection "{identifier}"')
                 return collection_to_dict(collection), 200
@@ -220,6 +233,19 @@ def collections():
             return getattr(error, 'message', str(error)), 400
 
 
+class RefreshJobSchema(Schema):
+    class Meta:
+        ordered = True
+
+    identifier = fields.String(required=True, validate=Regexp(photo_db.identifier_pattern),
+                               metadata={'title': 'Identifier'})
+    display_name = fields.String(load_default='', metadata={'title': 'Name'})
+    hostname = fields.String(required=True, metadata={'title': 'Hostname'})
+    schedule = fields.String(required=True, metadata={'title': 'Schedule'})
+    enabled = fields.Boolean(load_default=True, metadata={'title': 'Enabled'})
+    filter = fields.String(load_default='true', metadata={'title': 'Filter'})
+
+
 @app.route('/schedules', methods=['PUT', 'GET', 'PATCH', 'DELETE'])
 def schedules():
     def refresh_job_to_dict(job: RefreshJob):
@@ -242,16 +268,8 @@ def schedules():
             return response, 200
 
         if request.method == 'PUT':
-            class PutRefreshJobSchema(Schema):
-                identifier = fields.String(required=True)
-                display_name = fields.String()
-                hostname = fields.String(required=True)
-                schedule = fields.String(required=True)
-                enabled = fields.Boolean(load_default=True)
-                filter = fields.String(load_default='true')
-
             try:
-                result = PutRefreshJobSchema().load(request.json)
+                result = RefreshJobSchema().load(request.json)
             except ValidationError as error:
                 return error.messages, 400
 
@@ -260,7 +278,11 @@ def schedules():
                 if has_refresh_job(identifier):
                     return 'A schedule for the given identifier already exists', 400
 
-                job = add_refresh_job(app.config['PHOTO_DB_PATH'], identifier, result.get('display_name', identifier),
+                display_name = result.get('display_name')
+                if not display_name:
+                    display_name = identifier
+
+                job = add_refresh_job(app.config['PHOTO_DB_PATH'], identifier, display_name,
                                       result['hostname'], result['schedule'], result['enabled'], result['filter'])
                 app.logger.info(f'Added refresh job "{identifier}"')
                 return refresh_job_to_dict(job), 200
@@ -304,3 +326,44 @@ def schedules():
         except Exception as error:
             app.logger.debug('Invalid arguments', exc_info=True)
             return getattr(error, 'message', str(error)), 400
+
+
+@app.route('/schema/collection.json')
+def schema_collection():
+    json_schema = JSONSchema(props_ordered=True)
+    return json_schema.dump(CollectionSchema())
+
+
+@app.route('/schema/<class_name>/settings.json')
+def schema_collection_settings(class_name: str):
+    schema = get_collection_settings_schema(class_name)
+    if schema is None:
+        return 'Unknown collection class', 400
+
+    json_schema = JSONSchema(props_ordered=True)
+    return json_schema.dump(schema)
+
+
+@app.route('/schema/schedule.json')
+def schema_refresh_job():
+    json_schema = JSONSchema(props_ordered=True)
+    return json_schema.dump(RefreshJobSchema())
+
+
+@app.route('/default/schedule.json')
+def default_refresh_job():
+    return RefreshJobSchema().load({
+        'identifier': 'local',
+        'hostname': 'localhost',
+        'schedule': '*/15 * * * *'
+    })
+
+
+@app.route('/default/collection.json')
+def default_collection():
+    return CollectionSchema().load({
+        'identifier': 'local',
+        'schedule': '0 */1 * * *',
+        'class_name': FileSystemCollection.__name__,
+        'settings': FileSystemCollection.get_settings_default()
+    })

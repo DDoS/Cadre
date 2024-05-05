@@ -1,6 +1,7 @@
 
 import atexit
 import logging
+import platform
 import socket
 import sqlite3
 from datetime import datetime, timedelta
@@ -10,6 +11,7 @@ from urllib.parse import urlparse, unquote
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 import requests
 
 import photo_db
@@ -36,7 +38,7 @@ class RefreshJob:
         self._hostname = hostname
         self._is_local_address = RefreshJob._hostname_is_local(hostname)
         self._schedule = schedule
-        self._trigger = CronTrigger.from_crontab(self._schedule)
+        self._trigger = CronTrigger.from_crontab(self._schedule) if self._schedule else None
         self._enabled = enabled
         self._filter = filter if isinstance(filter, Filter) else parse_filter(filter)
         self._job = None
@@ -55,6 +57,11 @@ class RefreshJob:
     @property
     def hostname(self):
         return self._hostname
+
+
+    @property
+    def external_hostname(self):
+        return platform.node() if self._is_local_address else self.hostname
 
 
     @property
@@ -80,8 +87,9 @@ class RefreshJob:
         if not self._enabled:
             raise ValueError('Can\'t start a disabled refresh job')
 
-        self._job = refresh_scheduler.add_job(lambda: self._refresh(photo_db_path), trigger=self._trigger,
-                                              misfire_grace_time=60, coalesce=True)
+        if self._trigger:
+            self._job = refresh_scheduler.add_job(lambda: self._refresh(photo_db_path), trigger=self._trigger,
+                                                  misfire_grace_time=60, coalesce=True)
 
 
     def _refresh(self, photo_db_path: Path):
@@ -96,9 +104,15 @@ class RefreshJob:
             refresh_job_logger.exception('Failed to post an image to Affiche')
 
 
-    def manual_refresh(self, delay: float = 0):
+    def manual_refresh(self, photo_db_path: Path, delay: float = 0):
+        if not self._enabled:
+            raise ValueError('Can\'t refresh a disabled job')
+
+        trigger_date = datetime.now() + timedelta(seconds=delay)
         if self._job:
-            self._job.modify(next_run_time=datetime.now() + timedelta(seconds=delay))
+            self._job.modify(next_run_time=trigger_date)
+        else:
+            refresh_scheduler.add_job(lambda: self._refresh(photo_db_path), trigger=DateTrigger(trigger_date))
 
 
     def stop(self):

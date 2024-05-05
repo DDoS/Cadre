@@ -119,14 +119,16 @@ class Collection:
         if not self._enabled:
             raise ValueError('Can\'t start a disabled collection')
 
-        process_class = self.__class__._get_process_class()
-
         self._queue = mp.Queue()
+        process_class = self.__class__._get_process_class()
         self._process = mp.Process(target=_start_process, args=(self._queue, photo_db_path, self._id, self._identifier,
                                                                 self._schedule, process_class, self._settings))
         self._process.start()
 
     def manual_update(self, delay: float = 0):
+        if not self._enabled:
+            raise ValueError('Can\'t update a disabled collection')
+
         if self._process is not None and self._queue is not None:
             self._queue.put(_UpdateMessage(delay))
 
@@ -458,9 +460,11 @@ def _start_process(message_queue: mp.Queue, photo_db_path: Path, id: int, identi
 
         return running
 
-    schedule_iterator = croniter(schedule)
+    schedule_iterator = croniter(schedule) if schedule else None
     def wait_for_next_update():
-        update_next_update_time(schedule_iterator.get_next(start_time=time.time()))
+        next_scheduled_time = schedule_iterator.get_next(start_time=time.time()) if \
+            schedule_iterator else datetime.max
+        update_next_update_time(next_scheduled_time)
 
         while running:
             time_left = next_update_time - time.time()

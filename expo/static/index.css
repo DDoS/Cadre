@@ -14,14 +14,14 @@ body {
     align-items: center;
     max-width: 100%;
     max-height: 100%;
-    padding: 32px 12px 0 12px;
+    padding: 24px 12px;
 }
 
 .expo-title {
-    font-size: 40pt;
+    font-size: 36pt;
     font-style: italic;
     font-weight: 700;
-    margin-bottom: 32px;
+    margin-bottom: 24px;
 }
 
 .expo-content {
@@ -138,4 +138,18 @@ body {
             padding-left: 6px;
         }
     }
+}
+
+.expo-refresh-scan {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: 11pt;
+    margin-top: 16px;
+}
+
+.expo-delay-input {
+    width: 52px;
 }

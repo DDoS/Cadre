@@ -1,4 +1,5 @@
 import logging
+import platform
 import signal
 import subprocess
 import json
@@ -12,6 +13,7 @@ from urllib.request import urlopen, urlretrieve
 
 from flask import Flask, request, redirect, send_file, url_for
 from werkzeug.utils import secure_filename
+import requests
 
 
 # Make sure we can shutdown using SIGINT
@@ -83,6 +85,14 @@ def setup_app_config(app: Flask):
     if not display_writer_path.is_file():
         raise Exception(f'Display writer executable not found: "{display_writer_path}"')
     app.config['DISPLAY_WRITER_PATH'] = display_writer_path
+
+    expo_address = app.config['EXPO_ADDRESS']
+    if expo_address is not None:
+        if expo_address == '':
+            expo_address = platform.node()
+        if ':' not in expo_address:
+            expo_address += ':21110'
+        app.config['EXPO_ADDRESS'] = expo_address
 
 
 DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
@@ -280,3 +290,24 @@ def preview(file_name: str):
             app.log_exception(exception)
 
         return '', 204
+
+@app.route('/expo')
+def expo():
+    expo_address = app.config['EXPO_ADDRESS']
+    if not expo_address:
+        return '', 204
+
+    try:
+        response = requests.get(f'http://{expo_address}/schedules?hostname={platform.node()}')
+        schedules = {}
+        for schedule in response.json():
+            if schedule['enabled']:
+                schedules[schedule['identifier']] = schedule['display_name']
+    except Exception as exception:
+        app.logger.debug('Expo error', exc_info=True)
+        return f'Expo error: {getattr(exception, 'message', str(exception))}', 503
+
+    return {
+        'address': expo_address,
+        'schedules': schedules
+    }, 200

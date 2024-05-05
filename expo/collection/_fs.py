@@ -133,7 +133,7 @@ class FileSystemCollectionProcess(CollectionProcess):
                 logger.info(f'Scan was cancelled')
                 break
 
-            local_path = Path(entry.path).relative_to(self._root_path)
+            local_path = PurePosixPath(Path(entry.path).relative_to(self._root_path))
             modified_date = datetime.fromtimestamp(os.path.getmtime(entry.path)).astimezone()
             existing_data = db.execute('SELECT photo_id, modified_date as "d [datetime]" FROM fs_collections_data WHERE collection_id = ? AND path = ?',
                                        (self._id, local_path)).fetchone()

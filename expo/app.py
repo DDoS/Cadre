@@ -4,6 +4,7 @@ from pathlib import Path
 from logging.config import dictConfig
 
 from flask import Flask, request
+from flask_cors import CORS
 from marshmallow import Schema, fields, ValidationError
 from marshmallow.validate import OneOf, Regexp
 from marshmallow_jsonschema import JSONSchema
@@ -84,6 +85,7 @@ def start_background_jobs(app: Flask):
 
 app = Flask(__name__)
 app.json.sort_keys = False
+CORS(app)
 setup_app_config(app)
 start_background_jobs(app)
 
@@ -105,11 +107,11 @@ def refresh():
         return error.messages, 400
 
     job = get_refresh_job(result['identifier'])
-    if not job:
-        return 'No schedule for the given identifier', 404
+    if not job or not job.enabled:
+        return 'No enabled schedule for the given identifier', 404
 
     delay = max(0, float(result['delay']))
-    job.manual_refresh(delay)
+    job.manual_refresh(app.config['PHOTO_DB_PATH'], delay)
 
     return '', 200
 
@@ -126,8 +128,8 @@ def scan():
         return error.messages, 400
 
     collection = get_collection(result['identifier'])
-    if not collection:
-        return 'No collection for the given identifier', 404
+    if not collection or not collection.enabled:
+        return 'No enabled collection for the given identifier', 404
 
     delay = max(0, float(result['delay']))
     collection.manual_update(delay)
@@ -261,9 +263,11 @@ def schedules():
     identifier = request.args.get('identifier')
     if identifier is None:
         if request.method == 'GET':
+            hostname = request.args.get('hostname')
             response = []
             for job in get_refresh_jobs():
-                response.append(refresh_job_to_dict(job))
+                if not hostname or hostname == job.hostname or hostname == job.external_hostname:
+                    response.append(refresh_job_to_dict(job))
 
             return response, 200
 

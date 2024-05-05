@@ -269,6 +269,40 @@
 
                 collectionList.dispatchEvent(new Event('change'));
             });
+
+            const scheduleRefreshButton = document.getElementById("schedule-refresh");
+            const refreshDelayInput = document.getElementById("refresh-delay");
+            scheduleRefreshButton.addEventListener("click", async () => {
+                if (scheduleList.selectedIndex < 0) {
+                    return;
+                }
+
+                await fetch(new Request("/refresh", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        "identifier": scheduleList.value,
+                        "delay": refreshDelayInput.valueAsNumber
+                    })
+                }));
+            });
+
+            const scheduleScanButton = document.getElementById("schedule-scan");
+            const scanDelayInput = document.getElementById("scan-delay");
+            scheduleScanButton.addEventListener("click", async () => {
+                if (collectionList.selectedIndex < 0) {
+                    return;
+                }
+
+                await fetch(new Request("/scan", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        "identifier": collectionList.value,
+                        "delay": scanDelayInput.valueAsNumber
+                    })
+                }));
+            });
         </script>
     </head>
     <body>
@@ -290,6 +324,11 @@
                             <button class="expo-property-group__save-button" id="schedule-save-button">Save</button>
                         </div>
                     </div>
+                    <div class="expo-refresh-scan">
+                        <button class="expo-schedule-refresh" id="schedule-refresh">Schedule refresh</button>
+                        <label for="refresh-delay">Delay</label>
+                        <input type="number" class="expo-delay-input" id="refresh-delay" name="delay" value="0" min="0" /> seconds
+                    </div>
                 </div>
                 <div class="expo-content-item">
                     <div class="expo-item-title">Collections</div>
@@ -306,6 +345,11 @@
                             <div class="expo-properties" id="settings-editor"></div>
                             <button class="expo-property-group__save-button" id="collection-save-button">Save</button>
                         </div>
+                    </div>
+                    <div class="expo-refresh-scan">
+                        <button class="expo-schedule-scan" id="schedule-scan">Schedule scan</button>
+                        <label for="scan-delay">Delay</label>
+                        <input type="number" class="expo-delay-input" id="scan-delay" name="delay" value="0" min="0" /> seconds
                     </div>
                 </div>
             </div>

@@ -463,7 +463,7 @@ def _start_process(message_queue: mp.Queue, photo_db_path: Path, id: int, identi
     schedule_iterator = croniter(schedule) if schedule else None
     def wait_for_next_update():
         next_scheduled_time = schedule_iterator.get_next(start_time=time.time()) if \
-            schedule_iterator else datetime.max
+            schedule_iterator else datetime.max.timestamp()
         update_next_update_time(next_scheduled_time)
 
         while running:

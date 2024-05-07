@@ -6,12 +6,12 @@ import socket
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse, unquote
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.jobstores.base import JobLookupError
+from croniter import croniter
 import requests
 
 import photo_db
@@ -38,7 +38,6 @@ class RefreshJob:
         self._hostname = hostname
         self._is_local_address = RefreshJob._hostname_is_local(hostname)
         self._schedule = schedule
-        self._trigger = CronTrigger.from_crontab(self._schedule) if self._schedule else None
         self._enabled = enabled
         self._filter = filter if isinstance(filter, Filter) else parse_filter(filter)
         self._job = None
@@ -87,9 +86,24 @@ class RefreshJob:
         if not self._enabled:
             raise ValueError('Can\'t start a disabled refresh job')
 
-        if self._trigger:
-            self._job = refresh_scheduler.add_job(lambda: self._refresh(photo_db_path), trigger=self._trigger,
+        if not self._schedule:
+            return
+
+        # Not using CronTrigger to ensure a consistent cron notation with collections
+        schedule_iterator = croniter(self._schedule, ret_type=datetime)
+
+        def refresh_and_reschedule(start=False):
+            if not start:
+                self._refresh(photo_db_path)
+                if not self._job:
+                    return
+
+            next_date: datetime = schedule_iterator.get_next(start_time=datetime.now())
+            refresh_job_logger.debug(f'Next refresh: {next_date.isoformat()}')
+            self._job = refresh_scheduler.add_job(refresh_and_reschedule, trigger=DateTrigger(next_date),
                                                   misfire_grace_time=60, coalesce=True)
+
+        refresh_and_reschedule(True)
 
 
     def _refresh(self, photo_db_path: Path):
@@ -116,9 +130,16 @@ class RefreshJob:
 
 
     def stop(self):
-        if self._job:
-            refresh_scheduler.remove_job(self._job.id)
-            self._job = None
+        if not self._job:
+            return
+
+        job_id = self._job.id
+        self._job = None
+
+        try:
+            refresh_scheduler.remove_job(job_id)
+        except JobLookupError:
+            pass
 
 
     def _post_photo(self, photo_url: str):

@@ -1,9 +1,11 @@
 import signal
 import logging
+from enum import Enum
 from pathlib import Path
 from logging.config import dictConfig
 
 from flask import Flask, request
+from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 from marshmallow import Schema, fields, ValidationError
 from marshmallow.validate import OneOf, Regexp
@@ -83,6 +85,13 @@ def start_background_jobs(app: Flask):
     init_refresh_jobs(photo_db_path)
 
 
+class DefaultJSONProvider_EnumSupport(DefaultJSONProvider):
+    @staticmethod
+    def default(o):
+        return o.name if isinstance(o, Enum) else DefaultJSONProvider.default(o)
+
+
+Flask.json_provider_class = DefaultJSONProvider_EnumSupport
 app = Flask(__name__)
 app.json.sort_keys = False
 CORS(app)
@@ -246,6 +255,13 @@ class RefreshJobSchema(Schema):
     schedule = fields.String(required=True, metadata={'title': 'Schedule'})
     enabled = fields.Boolean(load_default=True, metadata={'title': 'Enabled'})
     filter = fields.String(load_default='true', metadata={'title': 'Filter'})
+    order = fields.Enum(Order, load_default=Order.SHUFFLE, metadata={'title': 'Order'})
+    affiche_options = fields.Dict(load_default={}, metadata={'title': 'Affiche options'})
+
+
+class RefreshJobSchema_MarshmallowJsonSchemaCompatibility(RefreshJobSchema):
+    order = fields.String(load_default=Order.SHUFFLE.name, validate=OneOf(Order.__members__.keys()),
+                          metadata={'title': 'Order'})
 
 
 @app.route('/schedules', methods=['PUT', 'GET', 'PATCH', 'DELETE'])
@@ -257,7 +273,9 @@ def schedules():
             'hostname': job.hostname,
             'schedule': job.schedule,
             'enabled': job.enabled,
-            'filter': str(job.filter)
+            'filter': str(job.filter),
+            'order': job.order.name,
+            'affiche_options': job.affiche_options
         }
 
     identifier = request.args.get('identifier')
@@ -287,7 +305,8 @@ def schedules():
                     display_name = identifier
 
                 job = add_refresh_job(app.config['PHOTO_DB_PATH'], identifier, display_name,
-                                      result['hostname'], result['schedule'], result['enabled'], result['filter'])
+                                      result['hostname'], result['schedule'], result['enabled'],
+                                      result['filter'], result['order'], result['affiche_options'])
                 app.logger.info(f'Added refresh job "{identifier}"')
                 return refresh_job_to_dict(job), 200
             except Exception as error:
@@ -316,6 +335,8 @@ def schedules():
             schedule = fields.String()
             enabled = fields.Boolean()
             filter = fields.String()
+            order = fields.Enum(Order)
+            affiche_options = fields.Dict()
 
         try:
             result = PatchRefreshJobSchema().load(request.json)
@@ -324,7 +345,8 @@ def schedules():
 
         try:
             job = modify_refresh_job(app.config['PHOTO_DB_PATH'], job, result.get('identifier'), result.get('display_name'),
-                                     result.get('hostname'), result.get('schedule'), result.get('enabled'), result.get('filter'))
+                                     result.get('hostname'), result.get('schedule'), result.get('enabled'), result.get('filter'),
+                                     result.get('order'), result.get('affiche_options'))
             app.logger.info(f'Modified refresh job "{identifier}"')
             return refresh_job_to_dict(job), 200
         except Exception as error:
@@ -351,7 +373,7 @@ def schema_collection_settings(class_name: str):
 @app.route('/schema/schedule.json')
 def schema_refresh_job():
     json_schema = JSONSchema(props_ordered=True)
-    return json_schema.dump(RefreshJobSchema())
+    return json_schema.dump(RefreshJobSchema_MarshmallowJsonSchemaCompatibility())
 
 
 @app.route('/default/schedule.json')

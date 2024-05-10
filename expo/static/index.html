@@ -92,7 +92,7 @@
             collectionList.addEventListener("change", event =>
                     setCollectionEditorValue(findItemByIdentifier(collections, event.target.value)));
 
-            const fillListBox = (list, items) =>
+            const fillListBox = async (list, items, setEditorDefaultValue) =>
             {
                 list.length = 0;
                 for (const [index, collection] of items.entries()) {
@@ -101,11 +101,15 @@
 
                 if (list.length > 0) {
                     list.selectedIndex = 0;
-                    list.dispatchEvent(new Event('change'));
+                } else {
+                    await setEditorDefaultValue();
+                    list.selectedIndex = -1;
                 }
+
+                list.dispatchEvent(new Event('change'));
             };
-            fillListBox(scheduleList, schedules);
-            fillListBox(collectionList, collections);
+            await fillListBox(scheduleList, schedules, async () => setScheduleEditorValue(scheduleDefaultValue));
+            await fillListBox(collectionList, collections, async () => await setCollectionEditorValue(collectionDefaultValue));
 
             const scheduleAddButton = document.getElementById("schedule-add-button")
             const scheduleRemoveButton = document.getElementById("schedule-remove-button")

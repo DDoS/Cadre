@@ -19,6 +19,7 @@ from marshmallow import Schema, ValidationError, fields
 
 import photo_db
 from ._filter import Filter
+from ._order import Order
 
 
 collection_logger = logging.getLogger('collection')
@@ -39,9 +40,7 @@ class _UpdateMessage:
 _ProcessMessage = _StopMessage | _UpdateMessage
 
 
-class CollectionProcess:
-    __metaclass__ = ABCMeta
-
+class CollectionProcess(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, id: int, identifier: str):
         self._id = id
@@ -52,9 +51,7 @@ class CollectionProcess:
         raise NotImplementedError()
 
 
-class Collection:
-    __metaclass__ = ABCMeta
-
+class Collection(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, id: int | None, identifier: str, display_name: str,
                  schedule: str, enabled: bool, settings: dict[str, Any]):
@@ -144,49 +141,6 @@ class Collection:
 
         self._process = None
         self._queue = None
-
-
-class DummyCollectionProcess(CollectionProcess):
-    def __init__(self, id: int, identifier: str):
-        super().__init__(id, identifier)
-
-    def update(self, db: sqlite3.Connection, cancellation_check: Callable[[], bool]):
-        pass
-
-
-class DummyCollection(Collection):
-    def __init__(self, id: int, identifier: str, display_name: str,
-                 schedule: str, enabled: bool, settings: dict[str, Any]):
-        super().__init__(id, identifier, display_name, schedule, enabled, settings)
-
-    @staticmethod
-    def get_settings_schema():
-        class SettingsSchema(Schema):
-            class Inner(Schema):
-                numbers = fields.List(fields.Float())
-                boolean = fields.DateTime()
-
-            text = fields.String()
-            inner = fields.Nested(Inner)
-
-        return SettingsSchema()
-
-    @staticmethod
-    def get_settings_default():
-        return {
-            'text': 'test',
-            'inner': {
-                'numbers': [3, 39],
-                'boolean': True
-            }
-        }
-
-    @staticmethod
-    def _get_process_class():
-        return DummyCollectionProcess
-
-    def get_photo_url(self, db: sqlite3.Connection, id: int):
-        return None
 
 
 _collection_classes_by_name: dict[str, type[Collection]] | None = None
@@ -322,8 +276,9 @@ def add_collection(photo_db_path: Path, identifier: str, display_name: str,
     return collection
 
 
-def modify_collection(photo_db_path: Path, collection: Collection, identifier: str = None, display_name: str = None,
-                      schedule: str = None, enabled: bool = None, class_name: str = None, settings: dict[str, Any] = None) -> Collection:
+def modify_collection(photo_db_path: Path, collection: Collection, identifier: str | None = None,
+                      display_name: str | None = None, schedule: str | None = None, enabled: bool | None = None,
+                      class_name: str | None = None, settings: dict[str, Any] | None = None) -> Collection:
     old_identifier = collection.identifier
     if identifier is not None and identifier != old_identifier and identifier in _collections_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
@@ -373,30 +328,56 @@ def remove_collection(photo_db_path: Path, collection: Collection):
         db.close()
 
 
-def get_new_photo_url(photo_db_path: Path, filter: Filter) -> str | None:
+def get_new_photo_url(photo_db_path: Path, filter: Filter, order: Order) -> str | None:
     try:
         db = photo_db.open(photo_db_path)
-        sql_filter = filter.to_sql()
-        collection_logger.debug(f'Generated SQLite filter: "{sql_filter}"')
+
+        sql_order, sql_order_filter = order.to_sql()
+        sql_filter = f'({filter.to_sql()})'
+        if sql_order_filter:
+            sql_filter += f' AND ({sql_order_filter})'
+        collection_logger.debug(f'Generated SQL filter: "{sql_filter}"')
+
+        new_display_date = datetime.now().astimezone()
+
         # Nested SELECT query for random selection is much faster: https://stackoverflow.com/a/24591696
-        row = db.execute('SELECT id, collection_id FROM (SELECT id, collection_id, display_date FROM photos WHERE id IN '
-                         '(SELECT photos.id FROM photos INNER JOIN collections ON collections.id = photos.collection_id WHERE '
-                         f'collections.enabled AND ({sql_filter}) ORDER BY RANDOM() LIMIT 2)) ORDER BY datetime(display_date) '
-                         'ASC LIMIT 1').fetchone()
+        choose_photo_sql = f"""
+        WITH candidate_photos AS (
+            SELECT photos.id, photos.cycle_count, photos.capture_date
+            FROM photos INNER JOIN collections ON collections.id = photos.collection_id
+            WHERE collections.enabled AND {sql_filter}
+        ),
+        cycle_bounds AS (
+            SELECT MIN(cycle_count) AS min_cycle_count, MAX(cycle_count) AS max_cycle_count
+            FROM candidate_photos
+        ),
+        new_cycle_counts AS (
+            SELECT MAX(min_cycle_count + 1, max_cycle_count) AS new_cycle_count
+            FROM cycle_bounds
+        )
+        UPDATE photos SET cycle_count = new_cycle_count, display_date = ?
+        FROM cycle_bounds, new_cycle_counts
+        WHERE id IN (
+            SELECT id FROM candidate_photos
+            WHERE cycle_count = min_cycle_count
+            ORDER BY {sql_order} LIMIT 1
+        )
+        RETURNING id, collection_id
+        """
+        with db:
+            row = db.execute(choose_photo_sql, (new_display_date,)).fetchone()
+
         if not row:
             return None
 
         photo_id, collection_id = row
-        with db:
-            new_display_date = datetime.now().astimezone()
-            db.execute('UPDATE photos SET display_date = ? WHERE id = ?', (new_display_date, photo_id))
 
         photo_url: str | None = None
         for collection in _collections_by_identifier.values():
             if collection._id == collection_id:
-                photo_url = collection.get_photo_url(db, photo_id)
-                collection_logger.debug(f'selected photo "{photo_url}" from "{collection.identifier}"')
-                break
+                if photo_url := collection.get_photo_url(db, photo_id):
+                    collection_logger.debug(f'selected photo "{photo_url}" from "{collection.identifier}"')
+                    break
 
         return photo_url
     finally:

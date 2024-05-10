@@ -1,11 +1,13 @@
 
 import atexit
+import json
 import logging
 import platform
 import socket
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse, unquote
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -15,7 +17,7 @@ from croniter import croniter
 import requests
 
 import photo_db
-from collection import get_new_photo_url, parse_filter, Filter
+from collection import get_new_photo_url, parse_filter, Filter, Order
 
 
 refresh_job_logger = logging.getLogger('refresh_job')
@@ -28,7 +30,8 @@ atexit.register(lambda: refresh_scheduler.shutdown())
 
 class RefreshJob:
     def __init__(self, id: int | None, identifier: str, display_name: str,
-                 hostname: str, schedule: str, enabled: bool, filter: str | Filter):
+                 hostname: str, schedule: str, enabled: bool, filter: str | Filter,
+                 order: str | Order, affiche_options: dict[str, Any]):
         if not photo_db.validate_identifier(identifier):
             raise ValueError('Invalid identifier')
 
@@ -40,6 +43,8 @@ class RefreshJob:
         self._schedule = schedule
         self._enabled = enabled
         self._filter = filter if isinstance(filter, Filter) else parse_filter(filter)
+        self._order = order if isinstance(order, Order) else Order[order]
+        self._affiche_options = affiche_options
         self._job = None
 
 
@@ -60,7 +65,14 @@ class RefreshJob:
 
     @property
     def external_hostname(self):
-        return platform.node() if self._is_local_address else self.hostname
+        if not self._is_local_address:
+            return self.hostname
+
+        external_hostname = platform.node()
+        if ':' in self._hostname:
+            external_hostname += f':{self._hostname.split(':')[1]}'
+
+        return external_hostname
 
 
     @property
@@ -76,6 +88,16 @@ class RefreshJob:
     @property
     def filter(self):
         return self._filter
+
+
+    @property
+    def order(self):
+        return self._order
+
+
+    @property
+    def affiche_options(self):
+        return self._affiche_options
 
 
     def _set_id(self, id: int):
@@ -109,7 +131,7 @@ class RefreshJob:
     def _refresh(self, photo_db_path: Path):
         try:
             refresh_job_logger.info(f'Running refresh job "{self._identifier}"')
-            if photo_url := get_new_photo_url(photo_db_path, self._filter):
+            if photo_url := get_new_photo_url(photo_db_path, self._filter, self._order):
                 refresh_job_logger.info(f'Posting: "{photo_url}" to {self._hostname}')
                 self._post_photo(photo_url)
             else:
@@ -187,8 +209,9 @@ _refresh_jobs_by_identifier: dict[str, RefreshJob] | None = None
 
 
 def _create_refresh_job(db: sqlite3.Connection, id: int | None, identifier: str, display_name: str,
-                       hostname: str, schedule: str, enabled: bool, filter: str | Filter) -> RefreshJob:
-    job = RefreshJob(id, identifier, display_name, hostname, schedule, enabled, filter)
+                       hostname: str, schedule: str, enabled: bool, filter: str | Filter,
+                       order: str | Order, affiche_options: dict[str, Any]) -> RefreshJob:
+    job = RefreshJob(id, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
 
     row = {
         'id': id,
@@ -197,12 +220,15 @@ def _create_refresh_job(db: sqlite3.Connection, id: int | None, identifier: str,
         'hostname': job.hostname,
         'schedule': job.schedule,
         'enabled': job.enabled,
-        'filter': str(job.filter)
+        'filter': str(job.filter),
+        'order': job.order.name,
+        'affiche_options_json': json.dumps(job.affiche_options)
     }
     with db:
-        id, = db.execute('INSERT INTO refresh_jobs VALUES(:id, :identifier, :display_name, :hostname, :schedule, :enabled, :filter) '
-                         'ON CONFLICT(id) DO UPDATE SET identifier = :identifier, display_name = :display_name, hostname = :hostname, '
-                         'schedule = :schedule, enabled = :enabled, filter = :filter RETURNING id', row).fetchone()
+        id, = db.execute('INSERT INTO refresh_jobs VALUES(:id, :identifier, :display_name, :hostname, :schedule, :enabled, '
+                         ':filter, :order, :affiche_options_json) ON CONFLICT(id) DO UPDATE SET identifier = :identifier, '
+                         'display_name = :display_name, hostname = :hostname, schedule = :schedule, enabled = :enabled, '
+                         'filter = :filter, "order" = :order, affiche_options_json = :affiche_options_json RETURNING id', row).fetchone()
 
     job._set_id(id)
     return job
@@ -216,9 +242,9 @@ def init_refresh_jobs(photo_db_path: Path):
     refresh_jobs: list[RefreshJob] = []
     try:
         db = photo_db.open(photo_db_path)
-        for row in db.execute('SELECT id, identifier, display_name, hostname, '
-                              'schedule, enabled, filter FROM refresh_jobs'):
-            refresh_jobs.append(RefreshJob(row[0], row[1], row[2], row[3], row[4], bool(row[5]), row[6]))
+        for row in db.execute('SELECT id, identifier, display_name, hostname, schedule, enabled, '
+                              'filter, "order", affiche_options_json FROM refresh_jobs'):
+            refresh_jobs.append(RefreshJob(row[0], row[1], row[2], row[3], row[4], bool(row[5]), row[6], row[7], json.loads(row[8])))
     except Exception:
         refresh_job_logger.exception('Invalid refresh job in the photo DB')
     finally:
@@ -250,13 +276,14 @@ def has_refresh_job(identifier: str):
 
 
 def add_refresh_job(photo_db_path: Path, identifier: str, display_name: str,
-                    hostname: str, schedule: str, enabled: bool, filter: str | Filter) -> RefreshJob:
+                    hostname: str, schedule: str, enabled: bool, filter: str | Filter,
+                    order: str | Order, affiche_options: dict[str, Any]) -> RefreshJob:
     if identifier in _refresh_jobs_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
     try:
         db = photo_db.open(photo_db_path)
-        job = _create_refresh_job(db, None, identifier, display_name, hostname, schedule, enabled, filter)
+        job = _create_refresh_job(db, None, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
         refresh_job_logger.info(f'Added "{job.identifier}"')
     finally:
         db.close()
@@ -268,8 +295,10 @@ def add_refresh_job(photo_db_path: Path, identifier: str, display_name: str,
     return job
 
 
-def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str = None, display_name: str = None,
-                       hostname: str = None, schedule: str = None, enabled: bool = None, filter: str | Filter = None) -> RefreshJob:
+def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str | None = None,
+                       display_name: str | None = None, hostname: str | None = None, schedule: str | None = None,
+                       enabled: bool | None = None, filter: str | Filter | None = None,
+                       order: str | Order | None = None, affiche_options: dict[str, Any] | None = None) -> RefreshJob:
     old_identifier = job.identifier
     if identifier is not None and identifier != old_identifier and identifier in _refresh_jobs_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
@@ -286,12 +315,16 @@ def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str = N
         enabled = job.enabled
     if filter is None:
         filter = job.filter
+    if order is None:
+        order = job.order
+    if affiche_options is None:
+        affiche_options = job.affiche_options
 
     job.stop()
 
     try:
         db = photo_db.open(photo_db_path)
-        job = _create_refresh_job(db, job._id, identifier, display_name, hostname, schedule, enabled, filter)
+        job = _create_refresh_job(db, job._id, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
         refresh_job_logger.info(f'Modified "{identifier}"')
     finally:
         db.close()

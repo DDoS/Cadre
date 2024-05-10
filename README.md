@@ -26,7 +26,7 @@ normal that the images look washed out. That's what it looks like on the
 actual display. This tool focuses on at least keeping the colours as true
 to the originals are possible.
 
-### Build (draft)
+### Build
 
 - Install Vcpkg
 - Install pkg-config
@@ -102,7 +102,7 @@ Create a collection by `PUT`ting to `/collections` a JSON object like so:
 ```
 - `identifier` must be unique, contain only characters in the set `[A-Za-z0-9_]`, and cannot start with a number
 - `display_name` is optional and defaults to the `identifier` value
-- `schedule` uses the Cron format
+- `schedule` Cron expression, or empty string to never run automatically
 - `enabled` is optional and defaults to `true`
 - `class_name` can only be `FileSystemCollection`
 - `settings` depends on the `class_name` value
@@ -132,6 +132,10 @@ Immediately trigger a collection scan by `POST`ing to `/scan` a JSON object like
 ### Schedules
 
 The schedule API uses the same methods as collections, but on the `/schedules` endpoint.
+There is a new optional `hostname` argument for `GET` queries, to filter schedules by the
+target hostname. It will be compared against the original hostname and the external one
+if they're different (ex.: `localhost` and `affiche.local`).
+
 The JSON format is:
 ```json
 {
@@ -146,7 +150,7 @@ The JSON format is:
 - `identifier` must be unique, contain only characters in the set `[A-Za-z0-9_]`, and cannot start with a number
 - `display_name` is optional and defaults to the `identifier` value
 - `hostname` is the hostname (optionally with a `:<port>` suffix) where an Affiche instance is running
-- `schedule` uses the Cron format
+- `schedule` Cron expression, or empty string to never run automatically
 - `enabled` is optional and defaults to `true`
 - `filter` is optional and defaults to `"true"`
 

@@ -135,8 +135,8 @@ class FileSystemCollectionProcess(CollectionProcess):
 
             local_path = PurePosixPath(Path(entry.path).relative_to(self._root_path))
             modified_date = datetime.fromtimestamp(os.path.getmtime(entry.path)).astimezone()
-            existing_data = db.execute('SELECT photo_id, modified_date as "d [datetime]" FROM fs_collections_data WHERE collection_id = ? AND path = ?',
-                                       (self._id, local_path)).fetchone()
+            existing_data = db.execute('SELECT photo_id, modified_date as "d [datetime]" FROM fs_collections_data '
+                                       'WHERE collection_id = ? AND path = ?', (self._id, local_path)).fetchone()
 
             photo_id: int = None
             if existing_data:
@@ -164,7 +164,7 @@ class FileSystemCollectionProcess(CollectionProcess):
                     'height': image_info.height,
                     'capture_date': image_info.capture_date
                 }
-                photo_id, = db.execute('INSERT INTO photos VALUES(:photo_id, :collection_id, NULL, :format, :width, :height, NULL, :capture_date) '
+                photo_id, = db.execute('INSERT INTO photos VALUES(:photo_id, :collection_id, 0, NULL, :format, :width, :height, NULL, :capture_date) '
                                        'ON CONFLICT DO UPDATE SET format = :format, width = :width, height = :height, capture_date = :capture_date '
                                        'RETURNING id', photos_data).fetchone()
 
@@ -220,5 +220,8 @@ class FileSystemCollection(Collection):
             logger.error(f'No photo in collection {self.identifier} with id {id}')
             return None
 
-        local_path, = row
-        return (self._root_path / local_path).as_uri()
+        path: Path = self._root_path / row[0]
+        if not path.exists():
+            return None
+
+        return path.as_uri()

@@ -12,9 +12,7 @@ class _TokenKind(Enum):
     IDENTIFIER = auto()
 
 
-class Filter:
-    __metaclass__ = ABCMeta
-
+class Filter(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, source: tuple[int, int]):
         self._source = source

@@ -17,7 +17,7 @@ from typing import Any, Callable
 from croniter import croniter
 from marshmallow import Schema, ValidationError, fields
 
-import photo_db
+import expo_db
 from ._filter import Filter
 from ._order import Order
 
@@ -55,7 +55,7 @@ class Collection(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, id: int | None, identifier: str, display_name: str,
                  schedule: str, enabled: bool, settings: dict[str, Any]):
-        if not photo_db.validate_identifier(identifier):
+        if not expo_db.validate_identifier(identifier):
             raise ValueError('Invalid identifier')
 
         if errors := self.__class__.get_settings_schema().validate(settings):
@@ -112,13 +112,13 @@ class Collection(metaclass=ABCMeta):
     def _get_process_class() -> type[CollectionProcess]:
         raise NotImplementedError()
 
-    def start(self, photo_db_path: Path):
+    def start(self, db_path: Path):
         if not self._enabled:
             raise ValueError('Can\'t start a disabled collection')
 
         self._queue = mp.Queue()
         process_class = self.__class__._get_process_class()
-        self._process = mp.Process(target=_start_process, args=(self._queue, photo_db_path, self._id, self._identifier,
+        self._process = mp.Process(target=_start_process, args=(self._queue, db_path, self._id, self._identifier,
                                                                 self._schedule, process_class, self._settings))
         self._process.start()
 
@@ -201,7 +201,7 @@ def _create_collection(db: sqlite3.Connection, id: int | None, identifier: str, 
     return collection
 
 
-def init_collections(photo_db_path: Path):
+def init_collections(db_path: Path):
     global _collections_by_identifier
     if _collections_by_identifier is not None:
         return
@@ -222,7 +222,7 @@ def init_collections(photo_db_path: Path):
 
     collections: list[Collection] = []
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         for row in db.execute('SELECT id, identifier, display_name, schedule, enabled, class_name, settings_json FROM collections'):
             class_name = row[5]
             CollectionClass = _collection_class_from_name(class_name)
@@ -235,7 +235,7 @@ def init_collections(photo_db_path: Path):
     for collection in collections:
         if collection.enabled:
             collection_logger.info(f'Starting "{collection.identifier}"')
-            collection.start(photo_db_path)
+            collection.start(db_path)
 
     collection_logger.info('Started all collections')
 
@@ -257,13 +257,13 @@ def has_collection(identifier: str):
     return identifier in _collections_by_identifier
 
 
-def add_collection(photo_db_path: Path, identifier: str, display_name: str,
+def add_collection(db_path: Path, identifier: str, display_name: str,
                    schedule: str, enabled: bool, class_name: str, settings: dict[str, Any]) -> Collection:
     if identifier in _collections_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         collection = _create_collection(db, None, identifier, display_name, schedule, enabled, class_name, settings)
         collection_logger.info(f'Added "{collection.identifier}"')
     finally:
@@ -271,12 +271,12 @@ def add_collection(photo_db_path: Path, identifier: str, display_name: str,
 
     _collections_by_identifier[collection.identifier] = collection
     if collection.enabled:
-        collection.start(photo_db_path)
+        collection.start(db_path)
 
     return collection
 
 
-def modify_collection(photo_db_path: Path, collection: Collection, identifier: str | None = None,
+def modify_collection(db_path: Path, collection: Collection, identifier: str | None = None,
                       display_name: str | None = None, schedule: str | None = None, enabled: bool | None = None,
                       class_name: str | None = None, settings: dict[str, Any] | None = None) -> Collection:
     old_identifier = collection.identifier
@@ -299,7 +299,7 @@ def modify_collection(photo_db_path: Path, collection: Collection, identifier: s
     collection.stop()
 
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         collection = _create_collection(db, collection._id, identifier, display_name, schedule, enabled, class_name, settings)
         collection_logger.info(f'Modified "{identifier}"')
     finally:
@@ -310,17 +310,17 @@ def modify_collection(photo_db_path: Path, collection: Collection, identifier: s
         del _collections_by_identifier[old_identifier]
 
     if collection.enabled:
-        collection.start(photo_db_path)
+        collection.start(db_path)
 
     return collection
 
 
-def remove_collection(photo_db_path: Path, collection: Collection):
+def remove_collection(db_path: Path, collection: Collection):
     collection.stop()
     del _collections_by_identifier[collection.identifier]
 
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         with db:
             db.execute('DELETE FROM collections WHERE identifier = ?', (collection.identifier,))
         collection_logger.info(f'Removed "{collection.identifier}"')
@@ -328,9 +328,9 @@ def remove_collection(photo_db_path: Path, collection: Collection):
         db.close()
 
 
-def get_new_photo_url(photo_db_path: Path, filter: Filter, order: Order) -> str | None:
+def get_new_photo_url(db_path: Path, filter: Filter, order: Order) -> str | None:
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
 
         sql_order, sql_order_filter = order.to_sql()
         sql_filter = f'({filter.to_sql()})'
@@ -384,7 +384,7 @@ def get_new_photo_url(photo_db_path: Path, filter: Filter, order: Order) -> str 
         db.close()
 
 
-def _start_process(message_queue: mp.Queue, photo_db_path: Path, id: int, identifier: str, schedule: str,
+def _start_process(message_queue: mp.Queue, db_path: Path, id: int, identifier: str, schedule: str,
                    CollectionProcessClass: type[CollectionProcess], settings: dict[str, Any]):
     dictConfig({
         'version': 1,
@@ -457,7 +457,7 @@ def _start_process(message_queue: mp.Queue, photo_db_path: Path, id: int, identi
     collection: CollectionProcess = CollectionProcessClass(id, identifier, **settings)
     logger.info(f'Started {identifier}')
     while wait_for_next_update():
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         try:
             logger.info(f'Updating {identifier}')
             collection.update(db, lambda: not check_running(block=False))

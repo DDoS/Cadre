@@ -16,7 +16,7 @@ from apscheduler.jobstores.base import JobLookupError
 from croniter import croniter
 import requests
 
-import photo_db
+import expo_db
 from collection import get_new_photo_url, parse_filter, Filter, Order
 
 
@@ -32,7 +32,7 @@ class RefreshJob:
     def __init__(self, id: int | None, identifier: str, display_name: str,
                  hostname: str, schedule: str, enabled: bool, filter: str | Filter,
                  order: str | Order, affiche_options: dict[str, Any]):
-        if not photo_db.validate_identifier(identifier):
+        if not expo_db.validate_identifier(identifier):
             raise ValueError('Invalid identifier')
 
         self._id = id
@@ -70,7 +70,7 @@ class RefreshJob:
 
         external_hostname = platform.node()
         if ':' in self._hostname:
-            external_hostname += f':{self._hostname.split(':')[1]}'
+            external_hostname += f':{self._hostname.split(":")[1]}'
 
         return external_hostname
 
@@ -104,7 +104,7 @@ class RefreshJob:
         self._id = id
 
 
-    def start(self, photo_db_path: Path):
+    def start(self, db_path: Path):
         if not self._enabled:
             raise ValueError('Can\'t start a disabled refresh job')
 
@@ -116,7 +116,7 @@ class RefreshJob:
 
         def refresh_and_reschedule(start=False):
             if not start:
-                self._refresh(photo_db_path)
+                self._refresh(db_path)
                 if not self._job:
                     return
 
@@ -128,10 +128,10 @@ class RefreshJob:
         refresh_and_reschedule(True)
 
 
-    def _refresh(self, photo_db_path: Path):
+    def _refresh(self, db_path: Path):
         try:
             refresh_job_logger.info(f'Running refresh job "{self._identifier}"')
-            if photo_url := get_new_photo_url(photo_db_path, self._filter, self._order):
+            if photo_url := get_new_photo_url(db_path, self._filter, self._order):
                 refresh_job_logger.info(f'Posting: "{photo_url}" to {self._hostname}')
                 self._post_photo(photo_url)
             else:
@@ -140,7 +140,7 @@ class RefreshJob:
             refresh_job_logger.exception('Failed to post an image to Affiche')
 
 
-    def manual_refresh(self, photo_db_path: Path, delay: float = 0):
+    def manual_refresh(self, db_path: Path, delay: float = 0):
         if not self._enabled:
             raise ValueError('Can\'t refresh a disabled job')
 
@@ -148,7 +148,7 @@ class RefreshJob:
         if self._job:
             self._job.modify(next_run_time=trigger_date)
         else:
-            refresh_scheduler.add_job(lambda: self._refresh(photo_db_path), trigger=DateTrigger(trigger_date))
+            refresh_scheduler.add_job(lambda: self._refresh(db_path), trigger=DateTrigger(trigger_date))
 
 
     def stop(self):
@@ -234,14 +234,14 @@ def _create_refresh_job(db: sqlite3.Connection, id: int | None, identifier: str,
     return job
 
 
-def init_refresh_jobs(photo_db_path: Path):
+def init_refresh_jobs(db_path: Path):
     global _refresh_jobs_by_identifier
     if _refresh_jobs_by_identifier is not None:
         return
 
     refresh_jobs: list[RefreshJob] = []
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         for row in db.execute('SELECT id, identifier, display_name, hostname, schedule, enabled, '
                               'filter, "order", affiche_options_json FROM refresh_jobs'):
             refresh_jobs.append(RefreshJob(row[0], row[1], row[2], row[3], row[4], bool(row[5]), row[6], row[7], json.loads(row[8])))
@@ -253,7 +253,7 @@ def init_refresh_jobs(photo_db_path: Path):
     for job in refresh_jobs:
         if job.enabled:
             refresh_job_logger.info(f'Starting "{job.identifier}"')
-            job.start(photo_db_path)
+            job.start(db_path)
 
     refresh_job_logger.info('Scheduled all refreshes')
 
@@ -275,14 +275,14 @@ def has_refresh_job(identifier: str):
     return identifier in _refresh_jobs_by_identifier
 
 
-def add_refresh_job(photo_db_path: Path, identifier: str, display_name: str,
+def add_refresh_job(db_path: Path, identifier: str, display_name: str,
                     hostname: str, schedule: str, enabled: bool, filter: str | Filter,
                     order: str | Order, affiche_options: dict[str, Any]) -> RefreshJob:
     if identifier in _refresh_jobs_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         job = _create_refresh_job(db, None, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
         refresh_job_logger.info(f'Added "{job.identifier}"')
     finally:
@@ -290,12 +290,12 @@ def add_refresh_job(photo_db_path: Path, identifier: str, display_name: str,
 
     _refresh_jobs_by_identifier[job.identifier] = job
     if job.enabled:
-        job.start(photo_db_path)
+        job.start(db_path)
 
     return job
 
 
-def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str | None = None,
+def modify_refresh_job(db_path: Path, job: RefreshJob, identifier: str | None = None,
                        display_name: str | None = None, hostname: str | None = None, schedule: str | None = None,
                        enabled: bool | None = None, filter: str | Filter | None = None,
                        order: str | Order | None = None, affiche_options: dict[str, Any] | None = None) -> RefreshJob:
@@ -323,7 +323,7 @@ def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str | N
     job.stop()
 
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         job = _create_refresh_job(db, job._id, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
         refresh_job_logger.info(f'Modified "{identifier}"')
     finally:
@@ -334,17 +334,17 @@ def modify_refresh_job(photo_db_path: Path, job: RefreshJob, identifier: str | N
         del _refresh_jobs_by_identifier[old_identifier]
 
     if job.enabled:
-        job.start(photo_db_path)
+        job.start(db_path)
 
     return job
 
 
-def remove_refresh_job(photo_db_path: Path, job: RefreshJob):
+def remove_refresh_job(db_path: Path, job: RefreshJob):
     job.stop()
     del _refresh_jobs_by_identifier[job.identifier]
 
     try:
-        db = photo_db.open(photo_db_path)
+        db = expo_db.open(db_path)
         with db:
             db.execute('DELETE FROM refresh_jobs WHERE identifier = ?', (job.identifier,))
         refresh_job_logger.info(f'Removed "{job.identifier}"')

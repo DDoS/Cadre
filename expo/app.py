@@ -11,7 +11,7 @@ from marshmallow import Schema, fields, ValidationError
 from marshmallow.validate import OneOf, Regexp
 from marshmallow_jsonschema import JSONSchema
 
-import photo_db
+import expo_db
 from collection import *
 from refresh_job import *
 
@@ -73,16 +73,16 @@ def setup_app_config(app: Flask):
     app.config.from_file('default_config.json', load=json.load)
     app.config.from_file('config.json', load=json.load, silent=True)
 
-    photo_db_path: Path = SERVER_PATH / app.config['PHOTO_DB_PATH']
-    photo_db_path.parent.mkdir(exist_ok=True)
-    app.config['PHOTO_DB_PATH'] = photo_db_path
+    db_path: Path = SERVER_PATH / app.config['DB_PATH']
+    db_path.parent.mkdir(exist_ok=True)
+    app.config['DB_PATH'] = db_path
 
 
 def start_background_jobs(app: Flask):
-    photo_db_path = app.config['PHOTO_DB_PATH']
-    photo_db.setup(photo_db_path)
-    init_collections(photo_db_path)
-    init_refresh_jobs(photo_db_path)
+    db_path = app.config['DB_PATH']
+    expo_db.setup(db_path)
+    init_collections(db_path)
+    init_refresh_jobs(db_path)
 
 
 class DefaultJSONProvider_EnumSupport(DefaultJSONProvider):
@@ -120,7 +120,7 @@ def refresh():
         return 'No enabled schedule for the given identifier', 404
 
     delay = max(0, float(result['delay']))
-    job.manual_refresh(app.config['PHOTO_DB_PATH'], delay)
+    job.manual_refresh(app.config['DB_PATH'], delay)
 
     return '', 200
 
@@ -150,7 +150,7 @@ class CollectionSchema(Schema):
     class Meta:
         ordered = True
 
-    identifier = fields.String(required=True, validate=Regexp(photo_db.identifier_pattern),
+    identifier = fields.String(required=True, validate=Regexp(expo_db.identifier_pattern),
                                metadata={'title': 'Identifier'})
     display_name = fields.String(load_default='', metadata={'title': 'Name'})
     schedule = fields.String(required=True, metadata={'title': 'Schedule'})
@@ -196,7 +196,7 @@ def collections():
                 if not display_name:
                     display_name = identifier
 
-                collection = add_collection(app.config['PHOTO_DB_PATH'], identifier, display_name,
+                collection = add_collection(app.config['DB_PATH'], identifier, display_name,
                                             result['schedule'], result['enabled'], result['class_name'], result['settings'])
                 app.logger.info(f'Added collection "{identifier}"')
                 return collection_to_dict(collection), 200
@@ -216,7 +216,7 @@ def collections():
         return collection_to_dict(collection), 200
 
     if request.method == 'DELETE':
-        remove_collection(app.config['PHOTO_DB_PATH'], collection)
+        remove_collection(app.config['DB_PATH'], collection)
         app.logger.info(f'Removed collection "{identifier}"')
         return '', 200
 
@@ -235,7 +235,7 @@ def collections():
             return error.messages, 400
 
         try:
-            collection = modify_collection(app.config['PHOTO_DB_PATH'], collection, result.get('identifier'), result.get('display_name'),
+            collection = modify_collection(app.config['DB_PATH'], collection, result.get('identifier'), result.get('display_name'),
                                            result.get('schedule'), result.get('enabled'), result.get('class_name'), result.get('settings'))
             app.logger.info(f'Modified collection "{identifier}"')
             return collection_to_dict(collection), 200
@@ -248,7 +248,7 @@ class RefreshJobSchema(Schema):
     class Meta:
         ordered = True
 
-    identifier = fields.String(required=True, validate=Regexp(photo_db.identifier_pattern),
+    identifier = fields.String(required=True, validate=Regexp(expo_db.identifier_pattern),
                                metadata={'title': 'Identifier'})
     display_name = fields.String(load_default='', metadata={'title': 'Name'})
     hostname = fields.String(required=True, metadata={'title': 'Hostname'})
@@ -304,7 +304,7 @@ def schedules():
                 if not display_name:
                     display_name = identifier
 
-                job = add_refresh_job(app.config['PHOTO_DB_PATH'], identifier, display_name,
+                job = add_refresh_job(app.config['DB_PATH'], identifier, display_name,
                                       result['hostname'], result['schedule'], result['enabled'],
                                       result['filter'], result['order'], result['affiche_options'])
                 app.logger.info(f'Added refresh job "{identifier}"')
@@ -323,7 +323,7 @@ def schedules():
         return refresh_job_to_dict(job), 200
 
     if request.method == 'DELETE':
-        remove_refresh_job(app.config['PHOTO_DB_PATH'], job)
+        remove_refresh_job(app.config['DB_PATH'], job)
         app.logger.info(f'Removed refresh job "{identifier}"')
         return '', 200
 
@@ -344,7 +344,7 @@ def schedules():
             return error.messages, 400
 
         try:
-            job = modify_refresh_job(app.config['PHOTO_DB_PATH'], job, result.get('identifier'), result.get('display_name'),
+            job = modify_refresh_job(app.config['DB_PATH'], job, result.get('identifier'), result.get('display_name'),
                                      result.get('hostname'), result.get('schedule'), result.get('enabled'), result.get('filter'),
                                      result.get('order'), result.get('affiche_options'))
             app.logger.info(f'Modified refresh job "{identifier}"')

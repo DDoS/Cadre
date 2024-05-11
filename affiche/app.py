@@ -81,10 +81,10 @@ def setup_app_config(app: Flask):
     delete_all_files(preview_path)
     app.config['PREVIEW_PATH'] = preview_path
 
-    display_writer_path: Path = SERVER_PATH / app.config['DISPLAY_WRITER_PATH']
+    display_writer_path: Path = SERVER_PATH / app.config['DISPLAY_WRITER_COMMAND'][0]
     if not display_writer_path.is_file():
         raise Exception(f'Display writer executable not found: "{display_writer_path}"')
-    app.config['DISPLAY_WRITER_PATH'] = display_writer_path
+    app.config['DISPLAY_WRITER_COMMAND'][0] = display_writer_path
 
     expo_address = app.config['EXPO_ADDRESS']
     if expo_address is not None:
@@ -124,8 +124,7 @@ def update_display_writer_preview(preview_path: Path):
         if preview_path is not None:
             preview_path.unlink(missing_ok=True)
 
-def run_display_writer(exec_path: Path, image_path: Path, display_palette: str,
-                       preview_path: Path, options: dict[str]) -> bool:
+def run_display_writer(command: list[Path | str], image_path: Path, preview_path: Path, options: dict[str]) -> bool:
     global display_writer_last_status
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
@@ -137,8 +136,7 @@ def run_display_writer(exec_path: Path, image_path: Path, display_palette: str,
 
         try:
             options_string = json.dumps(options)
-            process = subprocess.Popen(['python3', '-u', exec_path, image_path, '--palette', display_palette,
-                                        '--preview', preview_path, '--options', options_string, '--status'],
+            process = subprocess.Popen([*command, image_path, '--options', options_string, '--preview', preview_path],
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
             display_writer_last_status = DisplayWriterStatus.BUSY
@@ -250,10 +248,9 @@ def upload_file():
         except ValueError:
             pass
 
-    exec_path: Path = app.config['DISPLAY_WRITER_PATH']
-    display_palette: str = app.config['DISPLAY_PALETTE']
+    display_writer_command: list[Path | str] = app.config['DISPLAY_WRITER_COMMAND']
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
-    if not run_display_writer(exec_path, file_path, display_palette, preview_path, options):
+    if not run_display_writer(display_writer_command, file_path, preview_path, options):
         return redirect(request.url)
 
     return redirect(request.url)
@@ -305,7 +302,7 @@ def expo():
                 schedules[schedule['identifier']] = schedule['display_name']
     except Exception as exception:
         app.logger.debug('Expo error', exc_info=True)
-        return f'Expo error: {getattr(exception, 'message', str(exception))}', 503
+        return f'Expo error: {getattr(exception, "message", str(exception))}', 503
 
     return {
         'address': expo_address,

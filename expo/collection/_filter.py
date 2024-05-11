@@ -6,7 +6,7 @@ from typing import Generator, Union
 
 class _TokenKind(Enum):
     START = auto()
-    END = ()
+    END = auto()
     OPERATOR = auto()
     NUMBER = auto()
     IDENTIFIER = auto()

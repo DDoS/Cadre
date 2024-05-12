@@ -1,4 +1,5 @@
 import atexit
+import ipaddress
 import json
 import logging
 import socket
@@ -196,15 +197,12 @@ class RefreshJob:
     def _hostname_is_local(hostname: str):
         try:
             hostname_and_port = hostname.split(':')
-            target_hostname = hostname_and_port[0]
-            target_port = hostname_and_port[1] if len(hostname_and_port) > 1 else 80
-
-            local_addresses = socket.getaddrinfo(socket.gethostname(), target_port)
-            target_addresses = socket.getaddrinfo(target_hostname, target_port)
-            for _, _, _, _, local_socket in local_addresses:
-                for _, _, _, _, target_socket in target_addresses:
-                    if target_socket[0] == local_socket[0]:
-                        return True
+            port = hostname_and_port[1] if len(hostname_and_port) > 1 else 80
+            addresses = socket.getaddrinfo(hostname_and_port[0], port, family=socket.AF_INET,
+                                           type=socket.SOCK_STREAM, proto=socket.IPPROTO_IP)
+            for _, _, _, _, (address, _) in addresses:
+                if ipaddress.ip_address(address).is_loopback:
+                    return True
         except Exception:
             raise ValueError(f'Invalid hostname: {hostname}')
 

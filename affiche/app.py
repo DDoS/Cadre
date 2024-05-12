@@ -1,5 +1,4 @@
 import logging
-import platform
 import signal
 import subprocess
 import json
@@ -19,6 +18,16 @@ import requests
 # Make sure we can shutdown using SIGINT
 if signal.getsignal(signal.SIGINT) == signal.SIG_IGN:
     signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
+# socket.getfqdn is broken on macOS, but platform.node() should return the correct value
+def get_external_hostname():
+    import platform
+    if platform.system() == 'Darwin':
+        return platform.node()
+
+    import socket
+    return socket.getfqdn()
 
 
 affiche_logger = logging.getLogger('affiche')
@@ -89,7 +98,7 @@ def setup_app_config(app: Flask):
     expo_address = app.config['EXPO_ADDRESS']
     if expo_address is not None:
         if expo_address == '':
-            expo_address = platform.node()
+            expo_address = get_external_hostname()
         if ':' not in expo_address:
             expo_address += ':21110'
         app.config['EXPO_ADDRESS'] = expo_address
@@ -295,7 +304,7 @@ def expo():
         return '', 204
 
     try:
-        response = requests.get(f'http://{expo_address}/schedules?hostname={platform.node()}')
+        response = requests.get(f'http://{expo_address}/schedules?hostname={get_external_hostname()}')
         schedules = {}
         for schedule in response.json():
             if schedule['enabled']:

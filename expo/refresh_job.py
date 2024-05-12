@@ -1,8 +1,6 @@
-
 import atexit
 import json
 import logging
-import platform
 import socket
 import sqlite3
 from datetime import datetime, timedelta
@@ -21,6 +19,14 @@ from collection import get_new_photo_url, parse_filter, Filter, Order
 
 
 refresh_job_logger = logging.getLogger('refresh_job')
+
+# socket.getfqdn is broken on macOS, but platform.node() should return the correct value
+def get_external_hostname():
+    import platform
+    if platform.system() == 'Darwin':
+        return platform.node()
+
+    return socket.getfqdn()
 
 
 refresh_scheduler = BackgroundScheduler()
@@ -68,7 +74,7 @@ class RefreshJob:
         if not self._is_local_address:
             return self.hostname
 
-        external_hostname = platform.node()
+        external_hostname = get_external_hostname()
         if ':' in self._hostname:
             external_hostname += f':{self._hostname.split(":")[1]}'
 

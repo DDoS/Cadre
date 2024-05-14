@@ -44,7 +44,7 @@ body {
     justify-content: center;
     width: 100%;
     max-width: max(150vh, 700px);
-    margin-top: 16px;
+    margin: 16px 0;
 }
 
 .affiche-content-item {
@@ -132,7 +132,8 @@ body {
     display: flex;
     flex-direction: row;
     align-self: stretch;
-    justify-content: space-evenly;
+    justify-content: center;
+    gap: 36px
 }
 
 .affiche-expo-integration__link {
@@ -146,7 +147,7 @@ body {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
 }
 
 .affiche-expo-refresh > label {

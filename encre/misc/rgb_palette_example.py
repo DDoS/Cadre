@@ -18,7 +18,7 @@ def main():
         py_encre.CIELab(32.81, 5.29, 0.12),
         py_encre.CIELab(35.99, -8.52, 2.97),
         py_encre.CIELab(33.04, -4.19, -8.16)
-    ], target_luminance=90)
+    ], target_lightness=90)
 
     image = np.zeros((480, 800), np.uint8)
     if not py_encre.convert(str(arguments.image_in_path), palette, image,

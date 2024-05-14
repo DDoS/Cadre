@@ -60,7 +60,7 @@ PYBIND11_MODULE(py_encre, m) {
         def_readwrite("d", &encre::Plane::w);
 
     py::class_<encre::Palette>(m, "Palette").
-        def_readonly_static("default_target_luminance", &encre::Palette::default_target_luminance).
+        def_readonly_static("default_target_lightness", &encre::Palette::default_target_lightness).
         def_readwrite("points", &encre::Palette::points).
         def_readwrite("gamut_vertices", &encre::Palette::gamut_vertices).
         def_readwrite("gamut_planes", &encre::Palette::gamut_planes).
@@ -118,12 +118,12 @@ PYBIND11_MODULE(py_encre, m) {
     m.def("initialize", &encre::initialize, py::arg("executable_path"), "Initialize the runtime");
     m.def("uninitalize", &encre::uninitalize, "Un-initialize the runtime");
 
-    m.def("make_palette_xyz", [](const std::vector<encre::CIEXYZ>& colors, float target_luminance) {
-                return encre::make_palette(colors, target_luminance);
-            }, py::arg("colors"), py::arg("target_luminance") = encre::Palette::default_target_luminance, "Make a palette from CIE XYZ colors");
-    m.def("make_palette_lab", [](const std::vector<encre::CIELab>& colors, float target_luminance) {
-                return encre::make_palette(colors, target_luminance);
-            }, py::arg("colors"), py::arg("target_luminance") = encre::Palette::default_target_luminance, "Make a palette from CIE Lab colors");
+    m.def("make_palette_xyz", [](const std::vector<encre::CIEXYZ>& colors, float target_lightness) {
+                return encre::make_palette(colors, target_lightness);
+            }, py::arg("colors"), py::arg("target_lightness") = encre::Palette::default_target_lightness, "Make a palette from CIE XYZ colors");
+    m.def("make_palette_lab", [](const std::vector<encre::CIELab>& colors, float target_lightness) {
+                return encre::make_palette(colors, target_lightness);
+            }, py::arg("colors"), py::arg("target_lightness") = encre::Palette::default_target_lightness, "Make a palette from CIE Lab colors");
 
     m.def("convert", [](const char* image_path, const encre::Palette& palette, py::array_t<uint8_t> output,
                         const encre::Options& options, const char* preview_image_path) {

@@ -52,7 +52,7 @@ namespace encre {
     };
 
     struct Palette {
-        static constexpr float default_target_luminance = 90;
+        static constexpr float default_target_lightness = 80;
 
         std::vector<Oklab> points;
         std::vector<Oklab> gamut_vertices;
@@ -107,9 +107,9 @@ namespace encre {
 
     ENCRE_EXPORT void uninitalize();
 
-    ENCRE_EXPORT Palette make_palette(std::span<const CIEXYZ> colors, float target_luminance = Palette::default_target_luminance);
+    ENCRE_EXPORT Palette make_palette(std::span<const CIEXYZ> colors, float target_lightness = Palette::default_target_lightness);
 
-    ENCRE_EXPORT Palette make_palette(std::span<const CIELab> colors, float target_luminance = Palette::default_target_luminance);
+    ENCRE_EXPORT Palette make_palette(std::span<const CIELab> colors, float target_lightness = Palette::default_target_lightness);
 
     ENCRE_EXPORT bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette, const Options& options,
             std::span<uint8_t> output, const char* preview_image_path = nullptr);

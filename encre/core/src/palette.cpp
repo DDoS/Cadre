@@ -46,7 +46,7 @@ namespace encre {
         {"inky_7_color", &inky_7_color_palette},
     };
 
-    Palette make_palette(std::span<const CIEXYZ> colors, float target_luminance) {
+    Palette make_palette(std::span<const CIEXYZ> colors, float target_lightness) {
         const auto point_count = colors.size();
 
         glm::vec2 l_extents{std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest()};
@@ -76,8 +76,8 @@ namespace encre {
             }
         }
 
-        const auto l_scale = target_luminance / l_extents.y;
-        l_extents = {l_extents.x * l_scale, target_luminance};
+        const auto l_scale = target_lightness / l_extents.y;
+        l_extents = {l_extents.x * l_scale, target_lightness};
         for (size_t i = 0; i < point_count; i++) {
             points[i].x *= l_scale;
             points_flattened[i * 3] *= l_scale;
@@ -145,7 +145,7 @@ namespace encre {
             .max_chroma = c_max};
     }
 
-    Palette make_palette(std::span<const CIELab> lab_colors, float target_luminance) {
+    Palette make_palette(std::span<const CIELab> lab_colors, float target_lightness) {
         std::vector<CIEXYZ> xyz_colors;
         xyz_colors.reserve(lab_colors.size());
 
@@ -154,6 +154,6 @@ namespace encre {
             vips_col_Lab2XYZ(lab.x, lab.y, lab.z, &xyz.x, &xyz.y, &xyz.z);
         }
 
-        return make_palette(xyz_colors, target_luminance);
+        return make_palette(xyz_colors, target_lightness);
     }
 }

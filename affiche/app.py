@@ -70,8 +70,8 @@ dictConfig({
 
 
 def setup_app_config(app: Flask):
-    app.config.from_file("default_config.json", load=json.load)
-    app.config.from_file("config.json", load=json.load, silent=True)
+    app.config.from_file('default_config.json', load=json.load)
+    app.config.from_file('config.json', load=json.load, silent=True)
 
     def delete_all_files(directory: Path):
         [file.unlink() for file in directory.iterdir() if file.is_file()]

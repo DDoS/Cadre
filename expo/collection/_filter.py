@@ -170,7 +170,7 @@ class _IdentifierSet(Filter):
         self._identifiers = identifiers
 
     def to_sql(self) -> str:
-        return " OR ".join(f'collections.identifier = "{identifier}"' for identifier in self._identifiers)
+        return ' OR '.join(f"collections.identifier = '{identifier}'" for identifier in self._identifiers)
 
     def __str__(self) -> str:
         return f'{{{" ".join(self._identifiers)}}}'

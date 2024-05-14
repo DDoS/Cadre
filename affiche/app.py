@@ -4,7 +4,6 @@ import subprocess
 import json
 import random
 import threading
-import traceback
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from logging.config import dictConfig
@@ -13,11 +12,22 @@ from urllib.request import urlopen, urlretrieve
 
 from flask import Flask, request, redirect, send_file, url_for
 from werkzeug.utils import secure_filename
+import requests
 
 
 # Make sure we can shutdown using SIGINT
 if signal.getsignal(signal.SIGINT) == signal.SIG_IGN:
     signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
+# socket.getfqdn is broken on macOS, but platform.node() should return the correct value
+def get_external_hostname():
+    import platform
+    if platform.system() == 'Darwin':
+        return platform.node()
+
+    import socket
+    return socket.getfqdn()
 
 
 affiche_logger = logging.getLogger('affiche')
@@ -60,8 +70,8 @@ dictConfig({
 
 
 def setup_app_config(app: Flask):
-    app.config.from_file("default_config.json", load=json.load)
-    app.config.from_file("config.json", load=json.load, silent=True)
+    app.config.from_file('default_config.json', load=json.load)
+    app.config.from_file('config.json', load=json.load, silent=True)
 
     def delete_all_files(directory: Path):
         [file.unlink() for file in directory.iterdir() if file.is_file()]
@@ -80,10 +90,18 @@ def setup_app_config(app: Flask):
     delete_all_files(preview_path)
     app.config['PREVIEW_PATH'] = preview_path
 
-    display_writer_path: Path = SERVER_PATH / app.config['DISPLAY_WRITER_PATH']
+    display_writer_path: Path = SERVER_PATH / app.config['DISPLAY_WRITER_COMMAND'][0]
     if not display_writer_path.is_file():
         raise Exception(f'Display writer executable not found: "{display_writer_path}"')
-    app.config['DISPLAY_WRITER_PATH'] = display_writer_path
+    app.config['DISPLAY_WRITER_COMMAND'][0] = display_writer_path
+
+    expo_address = app.config['EXPO_ADDRESS']
+    if expo_address is not None:
+        if expo_address == '':
+            expo_address = get_external_hostname()
+        if ':' not in expo_address:
+            expo_address += ':21110'
+        app.config['EXPO_ADDRESS'] = expo_address
 
 
 DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
@@ -115,8 +133,7 @@ def update_display_writer_preview(preview_path: Path):
         if preview_path is not None:
             preview_path.unlink(missing_ok=True)
 
-def run_display_writer(exec_path: Path, image_path: Path, display_palette: str,
-                       preview_path: Path, options: dict[str]) -> bool:
+def run_display_writer(command: list[Path | str], image_path: Path, preview_path: Path, options: dict[str]) -> bool:
     global display_writer_last_status
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
@@ -128,8 +145,7 @@ def run_display_writer(exec_path: Path, image_path: Path, display_palette: str,
 
         try:
             options_string = json.dumps(options)
-            process = subprocess.Popen(['python3', '-u', exec_path, image_path, '--palette', display_palette,
-                                        '--preview', preview_path, '--options', options_string, '--status'],
+            process = subprocess.Popen([*command, image_path, '--options', options_string, '--preview', preview_path],
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
             display_writer_last_status = DisplayWriterStatus.BUSY
@@ -241,10 +257,9 @@ def upload_file():
         except ValueError:
             pass
 
-    exec_path: Path = app.config['DISPLAY_WRITER_PATH']
-    display_palette: str = app.config['DISPLAY_PALETTE']
+    display_writer_command: list[Path | str] = app.config['DISPLAY_WRITER_COMMAND']
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
-    if not run_display_writer(exec_path, file_path, display_palette, preview_path, options):
+    if not run_display_writer(display_writer_command, file_path, preview_path, options):
         return redirect(request.url)
 
     return redirect(request.url)
@@ -281,3 +296,24 @@ def preview(file_name: str):
             app.log_exception(exception)
 
         return '', 204
+
+@app.route('/expo')
+def expo():
+    expo_address = app.config['EXPO_ADDRESS']
+    if not expo_address:
+        return '', 204
+
+    try:
+        response = requests.get(f'http://{expo_address}/schedules?hostname={get_external_hostname()}')
+        schedules = {}
+        for schedule in response.json():
+            if schedule['enabled']:
+                schedules[schedule['identifier']] = schedule['display_name']
+    except Exception as exception:
+        app.logger.debug('Expo error', exc_info=True)
+        return f'Expo error: {getattr(exception, "message", str(exception))}', 503
+
+    return {
+        'address': expo_address,
+        'schedules': schedules
+    }, 200

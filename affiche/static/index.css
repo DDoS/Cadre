@@ -2,20 +2,28 @@ body {
     font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue",
             Helvetica, Arial, "Lucida Grande", sans-serif;
     background-color: rgb(222, 221, 215);
-    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
 }
 
-.affiche-column {
+.affiche-main-container {
     display: flex;
     flex-direction: column;
     align-items: center;
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 24px 12px;
 }
 
 .affiche-title {
-    font-size: 40pt;
+    font-size: 36pt;
     font-style: italic;
     font-weight: 700;
-    margin: 48px 0;
+    margin-bottom: 24px;
 }
 
 .affiche-status {
@@ -31,8 +39,22 @@ body {
     margin-top: 8px;
 }
 
-.affiche-upload-form {
-    margin: 24px 0;
+.affiche-content {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: max(150vh, 700px);
+    margin: 16px 0;
+}
+
+.affiche-content-item {
+    margin: 12px;
+}
+
+.affiche-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .affiche-file-input {
@@ -67,7 +89,7 @@ body {
 }
 
 .affiche-options-header__title {
-    font-size: 12pt;
+    font-size: 11pt;
     font-weight: 600;
 }
 
@@ -85,21 +107,50 @@ body {
 .affiche-option {
     display: flex;
     width: 100%;
+    align-items: center;
     justify-content: space-between;
 }
 
-.affiche-option label {
+.affiche-option > label {
     font-size: 11pt;
     font-weight: 400;
     padding-right: 8px;
 }
 
 .affiche-preview {
-    max-width: 85vw;
+    object-fit: contain;
+    max-width: min(85vw, 100%);
 }
 
 .affiche-preview-title {
     font-size: 10pt;
     font-weight: 200;
     margin: 12px 0;
+}
+
+.affiche-expo-integration {
+    display: flex;
+    flex-direction: row;
+    align-self: stretch;
+    justify-content: center;
+    gap: 36px
+}
+
+.affiche-expo-integration__link {
+    font-size: 16pt;
+    font-style: italic;
+    font-weight: 700;
+}
+
+.affiche-expo-refresh {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.affiche-expo-refresh > label {
+    font-size: 11pt;
+    font-weight: 400;
 }

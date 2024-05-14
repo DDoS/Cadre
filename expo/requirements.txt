@@ -1,6 +1,8 @@
 flask
+flask-cors
 croniter
 APScheduler
 requests
 pyvips
 marshmallow
+marshmallow-jsonschema

@@ -1,0 +1,155 @@
+body {
+    font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue",
+            Helvetica, Arial, "Lucida Grande", sans-serif;
+    background-color: rgb(222, 221, 215);
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+}
+
+.expo-main-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+    max-height: 100%;
+    padding: 24px 12px;
+}
+
+.expo-title {
+    font-size: 36pt;
+    font-style: italic;
+    font-weight: 700;
+    margin-bottom: 24px;
+}
+
+.expo-content {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-self: stretch;
+    justify-content: center;
+    gap: 36px;
+}
+
+.expo-content-item {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+}
+
+.expo-item-title {
+    text-align: center;
+    font-size: 14pt;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.expo-list-and-properties {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 12px;
+}
+
+.expo-list {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.expo-list__select {
+    display: flex;
+    font-size: 10pt;
+    min-width: 100px;
+    max-width: 33%;
+    min-height: 24px;
+    margin-bottom: 4px;
+}
+
+.expo-list__add-remove {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    gap: 4px;
+}
+
+.expo-list__button {
+    font-size: 10pt;
+    font-weight: 600;
+    min-width: 24px;
+    min-height: 24px;
+}
+
+.expo-property-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    max-width: 300px;
+}
+
+.expo-properties {
+    font-size: 11pt;
+
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+
+    .je-object__title {
+        display: none;
+    }
+
+    .je-object__controls {
+        display: none;
+    }
+
+    > .je-object__container > .je-indented-panel {
+        padding: 0;
+        margin: 0;
+    }
+
+    .je-indented-panel {
+        border: none;
+
+        > div > div {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 4px;
+        }
+    }
+
+    .form-control {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        flex-wrap: wrap;
+
+        label {
+            margin-right: 8px;
+        }
+
+        .errmsg {
+            flex-basis: 100%;
+            color: lab(50% 45 15);
+            font-size: 9pt;
+            padding-left: 6px;
+        }
+    }
+}
+
+.expo-refresh-scan {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: 11pt;
+    margin-top: 16px;
+}
+
+.expo-delay-input {
+    width: 52px;
+}

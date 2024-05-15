@@ -48,17 +48,17 @@ dictConfig({
             'filename': str(SERVER_PATH / 'app.log'),
             'maxBytes': 1_000_000,
             'backupCount': 2,
-            'level': 'INFO',
+            'level': 'DEBUG',
             'formatter': 'standard'
         }
     },
     'loggers': {
         __name__: {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'handlers': ['file.handler']
         },
         'affiche': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'handlers': ['file.handler']
         },
         'werkzeug': {

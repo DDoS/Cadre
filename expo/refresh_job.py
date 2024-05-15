@@ -107,10 +107,6 @@ class RefreshJob:
         return self._affiche_options
 
 
-    def _set_id(self, id: int):
-        self._id = id
-
-
     def start(self, db_path: Path):
         if not self._enabled:
             raise ValueError('Can\'t start a disabled refresh job')
@@ -234,7 +230,7 @@ def _create_refresh_job(db: sqlite3.Connection, id: int | None, identifier: str,
                          'display_name = :display_name, hostname = :hostname, schedule = :schedule, enabled = :enabled, '
                          'filter = :filter, "order" = :order, affiche_options_json = :affiche_options_json RETURNING id', row).fetchone()
 
-    job._set_id(id)
+    job._id = id
     return job
 
 

@@ -1,5 +1,2 @@
 flask
 requests
-inky[rpi]
-pillow # Inky requirement
-numpy

@@ -3,7 +3,9 @@ build/
 .venv/
 __pycache__/
 temp/
+*_temp/
 
 *.log
 *.log.[0-9]
 *.out
+*.db

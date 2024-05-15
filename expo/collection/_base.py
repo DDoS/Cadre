@@ -7,15 +7,16 @@ import json
 import logging
 import multiprocessing as mp
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib import import_module
 from abc import ABCMeta, abstractmethod
 from logging.config import dictConfig
 from dataclasses import dataclass
+from copy import deepcopy
 from typing import Any, Callable
 
 from croniter import croniter
-from marshmallow import Schema, ValidationError, fields
+from marshmallow import Schema, ValidationError
 
 import expo_db
 from ._filter import Filter
@@ -35,9 +36,6 @@ class _StopMessage:
 @dataclass
 class _UpdateMessage:
     delay: float = 0
-
-
-_ProcessMessage = _StopMessage | _UpdateMessage
 
 
 class CollectionProcess(metaclass=ABCMeta):
@@ -94,8 +92,8 @@ class Collection(metaclass=ABCMeta):
     def settings(self):
         return self._settings
 
-    def _set_id(self, id: int):
-        self._id = id
+    def _merge_settings(self, other_settings: dict[str, Any] | None = None):
+        return other_settings if other_settings else deepcopy(self.settings)
 
     @staticmethod
     @abstractmethod
@@ -119,7 +117,7 @@ class Collection(metaclass=ABCMeta):
         self._queue = mp.Queue()
         process_class = self.__class__._get_process_class()
         self._process = mp.Process(target=_start_process, args=(self._queue, db_path, self._id, self._identifier,
-                                                                self._schedule, process_class, self._settings))
+                                                                self._schedule, process_class, self._merge_settings()))
         self._process.start()
 
     def manual_update(self, delay: float = 0):
@@ -190,14 +188,14 @@ def _create_collection(db: sqlite3.Connection, id: int | None, identifier: str, 
         'schedule': collection.schedule,
         'enabled': collection.enabled,
         'class_name': collection.class_name,
-        'settings_json': json.dumps(collection.settings)
+        'settings_json': json.dumps(collection._merge_settings())
     }
     with db:
         id, = db.execute('INSERT INTO collections VALUES(:id, :identifier, :display_name, :schedule, :enabled, :class_name, :settings_json) '
                          'ON CONFLICT(id) DO UPDATE SET identifier = :identifier, display_name = :display_name, schedule = :schedule, '
                          'enabled = :enabled, class_name = :class_name, settings_json = :settings_json RETURNING id', row).fetchone()
 
-    collection._set_id(id)
+    collection._id = id
     return collection
 
 
@@ -293,8 +291,7 @@ def modify_collection(db_path: Path, collection: Collection, identifier: str | N
         enabled = collection.enabled
     if class_name is None:
         class_name = collection.class_name
-    if settings is None:
-        settings = collection.settings
+    settings = collection._merge_settings(settings)
 
     collection.stop()
 
@@ -399,13 +396,13 @@ def _start_process(message_queue: mp.Queue, db_path: Path, id: int, identifier: 
                 'filename': str(Path(__file__).parent / f'{CollectionProcessClass.__name__}_{identifier}.log'),
                 'maxBytes': 1_000_000,
                 'backupCount': 2,
-                'level': 'INFO',
+                'level': 'DEBUG',
                 'formatter': 'standard'
             },
         },
         'loggers': {
             '': {
-                'level': 'DEBUG',
+                'level': 'INFO',
                 'handlers': ['file.handler']
             }
         }
@@ -415,11 +412,14 @@ def _start_process(message_queue: mp.Queue, db_path: Path, id: int, identifier: 
     logger.info(f'Starting {identifier}')
 
     next_update_time: float | None = None
-    def update_next_update_time(candidate_update_time: float):
+    def update_next_update_time(candidate_update_time: float | None):
         nonlocal next_update_time
 
         if next_update_time is not None and next_update_time < time.time():
             next_update_time = None
+
+        if candidate_update_time is None or candidate_update_time + 60 < time.time():
+            return
 
         if next_update_time is None or candidate_update_time < next_update_time:
             next_update_time = candidate_update_time
@@ -433,8 +433,10 @@ def _start_process(message_queue: mp.Queue, db_path: Path, id: int, identifier: 
             try:
                 match message_queue.get(block, timeout):
                     case _StopMessage():
+                        logger.debug('Stop message')
                         running = False
                     case _UpdateMessage(delay):
+                        logger.debug(f'Update message {delay}s')
                         update_next_update_time(time.time() + delay)
             except queue.Empty:
                 pass
@@ -443,13 +445,19 @@ def _start_process(message_queue: mp.Queue, db_path: Path, id: int, identifier: 
 
     schedule_iterator = croniter(schedule) if schedule else None
     def wait_for_next_update():
-        next_scheduled_time = schedule_iterator.get_next(start_time=time.time()) if \
-            schedule_iterator else datetime.max.timestamp()
+        next_scheduled_time: float | None = schedule_iterator.get_next(start_time=time.time()) if \
+            schedule_iterator else None
         update_next_update_time(next_scheduled_time)
 
         while running:
-            time_left = next_update_time - time.time()
-            if time_left <= 0 or not check_running(timeout=time_left):
+            time_left = None
+            if next_update_time is not None:
+                time_left = next_update_time - time.time()
+                if time_left <= 0:
+                    break
+
+
+            if not check_running(timeout=time_left):
                 break
 
         return running

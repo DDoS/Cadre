@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from amazon_photos import AmazonPhotos
 from marshmallow import INCLUDE, Schema, fields
 import pandas as pd
 
@@ -15,6 +14,14 @@ from ._base import Collection, CollectionProcess
 
 
 logger = logging.getLogger('')
+
+
+amazon_photos_available = False
+try:
+    from amazon_photos import AmazonPhotos
+    amazon_photos_available = True
+except ModuleNotFoundError:
+    logger.error('amazon_photos module not found: AmazonPhotosCollections update and refresh will not work.')
 
 
 class AmazonPhotosCollectionProcess(CollectionProcess):
@@ -30,6 +37,10 @@ class AmazonPhotosCollectionProcess(CollectionProcess):
                        'collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE, '
                        'node_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, modified_date TEXT NOT NULL, '
                        'update_token TEXT NOT NULL)')
+
+        if not amazon_photos_available:
+            logger.warning('amazon_photos module is not installed, skipping...')
+            return
 
         added_count = 0
         updated_count = 0
@@ -163,6 +174,10 @@ class AmazonPhotosCollection(Collection):
         return AmazonPhotosCollectionProcess
 
     def get_photo_url(self, db: sqlite3.Connection, id: int):
+        if not amazon_photos_available:
+            logger.warning('amazon_photos module is not installed.')
+            return None
+
         row = db.execute('SELECT node_id FROM azp_collections_data WHERE photo_id = ?', (id,)).fetchone()
         if not row:
             logger.error(f'No photo in collection {self.identifier} with id {id}')

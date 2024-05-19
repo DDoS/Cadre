@@ -1,0 +1,3 @@
+inky[rpi]
+pillow # Inky requirement
+numpy

@@ -40,25 +40,25 @@ dictConfig({
             'filename': str(SERVER_PATH / 'app.log'),
             'maxBytes': 1_000_000,
             'backupCount': 2,
-            'level': 'INFO',
+            'level': 'DEBUG',
             'formatter': 'standard'
         }
     },
     'loggers': {
         __name__: {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'handlers': ['file.handler']
         },
         'expo': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'handlers': ['file.handler']
         },
         'collection': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'handlers': ['file.handler']
         },
         'refresh_job': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'handlers': ['file.handler']
         },
         'werkzeug': {

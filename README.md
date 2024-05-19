@@ -58,10 +58,12 @@ otherwise you can eyeball them... An example is available [here](encre/misc/rgb_
 *Local web interface*
 
 After building [Encre](#encre), create a Python virtual environment, and install the
-[requirements](affiche/requirements.txt) using `pip`. Start the server using
-`start.sh`. Use `stop.sh` if you need to stop the server when it's running in the background.
-You might need to change system settings to make port `80` available without privileges.
-The simplest solution is to run `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80`.
+[requirements](affiche/requirements.txt) using `pip`. If you plan on using it with a
+"Pimoroni Inky" display, then also install [requirements-inky](affiche/requirements-inky.txt)
+
+Start the server using `start.sh`. Use `stop.sh` if you need to stop the server when it's running
+in the background. You might need to change system settings to make port `80` available without
+privileges. The simplest solution is to run `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80`.
 
 The server should be available at the host's LAN address on port `80`.
 
@@ -85,14 +87,14 @@ This is an optional component. It's a separate service which maintains a databas
 and periodically posts one to Affiche.
 
 Create a Python virtual environment, and install the [requirements](expo/requirements.txt) using `pip`.
+Additional requirements are also needed for the follow features:
+- `FileSystemCollection`: [requirements-fs](expo/requirements-fs.txt)
+- `AmazonPhotosCollection`: [requirements-azp](expo/requirements-azp.txt)
+
 Start the server using `start.sh`. Use `stop.sh` if you need to stop the server when it's running in the background.
 
 The server should be available at the host's LAN address on port `21110`.
 You can run Expo on the same host as Affiche or a different one.
-
-So far Expo only supports local filesystem collections. You can run the service on your photo NAS,
-or on a Raspberry Pi with an SMB share where you can copy your favorite photos.
-If you need raw photo format support, checkout [Cru](expo/cru).
 
 [<img src="images/expo_screenshot.png" width="400"/>](images/affiche_screenshot.jpeg)
 
@@ -104,6 +106,9 @@ In this file you can overwrite the following fields:
 
 ### Collections
 
+You can use this by running Expo on your photo NAS, or on a Raspberry Pi with an SMB share where
+you can copy your favorite photos. If you need raw photo format support, checkout [Cru](expo/cru).
+
 List all collections by `GET`ing from `/collections`.
 Create a collection by `PUT`ting to `/collections` a JSON object like so:
 ```json
@@ -114,7 +119,7 @@ Create a collection by `PUT`ting to `/collections` a JSON object like so:
     "enabled": true,
     "class_name": "FileSystemCollection",
     "settings": {
-        ...
+        // ...
     }
 }
 ```
@@ -139,6 +144,22 @@ Settings:
 ```json
 {
     "root_path": "<path to your local photos folder>"
+}
+```
+
+#### AmazonPhotosCollection
+
+Uses an unofficial [Amazon Photos Python API](https://github.com/trevorhobenshield/amazon_photos) by
+[Trevor Hobenshield](https://github.com/trevorhobenshield) (actually [a fork](https://github.com/DDoS/amazon_photos)
+with a few improvements).
+
+Settings:
+```json
+{
+    "user_agent": "<User agent string from the browser used to login to Amazon Photos>",
+    "cookies": {
+        // See https://github.com/trevorhobenshield/amazon_photos?tab=readme-ov-file#setup
+    }
 }
 ```
 
@@ -172,7 +193,7 @@ The JSON format is:
     "filter": "<filter expression>",
     "order": "<order enum name>",
     "affiche_options": {
-        ...
+        // ...
     }
 }
 ```

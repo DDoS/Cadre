@@ -8,12 +8,20 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 
 from marshmallow import Schema, fields
-import pyvips
 
 from ._base import Collection, CollectionProcess
 
 
 logger = logging.getLogger('')
+
+
+pyvips_available = False
+try:
+    import pyvips
+    pyvips_available = True
+except ModuleNotFoundError:
+    logger.error('pyvips module not found: FileSystemCollections scanning for new or modified images will not work.')
+
 
 cru_available = False
 try:
@@ -22,7 +30,7 @@ try:
     import cru
     cru_available = True
 except ModuleNotFoundError:
-    logger.warning('Cru module not found, raw image format support will be slow or broken.')
+    logger.warning('Cru module not found: raw image format support will be slow or broken.')
 
 
 def _scan_directory_recursive(path: PurePosixPath) -> Generator[os.DirEntry, None, None]:
@@ -41,21 +49,21 @@ def _date_with_local_timezone(date_time: datetime | None) -> datetime | None:
     return date_time
 
 
-def try_get_image_field(image: pyvips.Image, name: str):
+def _try_get_image_field(image: "pyvips.Image", name: str):
         try:
             return image.get(name)
         except pyvips.Error:
             return None
 
 
-def _get_image_capture_date(image: pyvips.Image) -> datetime | None:
+def _get_image_capture_date(image: "pyvips.Image") -> datetime | None:
 
-    date_time_str = try_get_image_field(image, 'exif-ifd2-DateTimeOriginal')
+    date_time_str = _try_get_image_field(image, 'exif-ifd2-DateTimeOriginal')
     if not date_time_str:
         return None
 
-    sub_seconds_str = try_get_image_field(image, 'exif-ifd2-SubSecTimeOriginal')
-    offset_str = try_get_image_field(image, 'exif-ifd2-OffsetTimeOriginal')
+    sub_seconds_str = _try_get_image_field(image, 'exif-ifd2-SubSecTimeOriginal')
+    offset_str = _try_get_image_field(image, 'exif-ifd2-OffsetTimeOriginal')
 
     date_time = None
     try:
@@ -83,6 +91,9 @@ class ImageInfo:
 
 
 def _try_load_image_info(path: PurePosixPath) -> ImageInfo | None:
+    if not pyvips_available:
+        return None
+
     if cru_available:
         try:
             if data := cru.load_image_info(str(path)):
@@ -95,7 +106,7 @@ def _try_load_image_info(path: PurePosixPath) -> ImageInfo | None:
 
         width = image.width
         height = image.height
-        orientation = try_get_image_field(image, 'orientation')
+        orientation = _try_get_image_field(image, 'orientation')
         # From vips_image_get_orientation_swap()
         if orientation and orientation >= 5 and orientation <= 8:
             width, height = height, width
@@ -120,7 +131,7 @@ class FileSystemCollectionProcess(CollectionProcess):
             db.execute('CREATE TABLE IF NOT EXISTS fs_collections_data('
                        'photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE, '
                        'collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE, '
-                       'path TEXT NOT NULL, modified_date TEXT NOT NULL, scan_token TEXT NOT NULL)')
+                       'path TEXT NOT NULL UNIQUE, modified_date TEXT NOT NULL, scan_token TEXT NOT NULL)')
 
         added_count = 0
         updated_count = 0
@@ -183,7 +194,7 @@ class FileSystemCollectionProcess(CollectionProcess):
                 deleted_count, = db.execute('SELECT COUNT(photo_id) FROM fs_collections_data WHERE collection_id = ? AND scan_token != ?',
                                             (self._id, scan_token)).fetchone()
                 db.execute('WITH missing_photos AS (SELECT photo_id FROM fs_collections_data WHERE collection_id = ? AND scan_token != ?) '
-                           'DELETE FROM photos WHERE id IN (SELECT photo_id FROM missing_photos)', (self._id, scan_token))
+                           'DELETE FROM photos WHERE id IN missing_photos', (self._id, scan_token))
 
         logger.info(f'Collection {self._identifier} refreshed. Added: {added_count}. Updated: {updated_count}. Deleted: {deleted_count}.')
 
@@ -192,7 +203,7 @@ class FileSystemCollection(Collection):
     def __init__(self, id: int, identifier: str, display_name: str,
                  schedule: str, enabled: bool, settings: dict[str, Any]):
         super().__init__(id, identifier, display_name, schedule, enabled, settings)
-        self._root_path = _get_real_path(self.settings['root_path'])
+        self._root_path = _get_real_path(self._settings['root_path'])
 
     @staticmethod
     def get_settings_schema():

@@ -18,19 +18,22 @@
 
             JSONEditor.defaults.options.theme = 'barebones';
             JSONEditor.defaults.options.show_errors = 'change';
+            JSONEditor.defaults.options.disable_collapse = true;
             JSONEditor.defaults.options.disable_edit_json = true;
             JSONEditor.defaults.options.disable_properties = true;
-            JSONEditor.defaults.options.disable_collapse = true;
             JSONEditor.defaults.options.no_additional_properties = true;
 
-            const makePropertyEditor = async (schemaUrl, editorId) => {
+            const makePropertyEditor = async (schemaUrl, editorId, options) => {
                 const response = await fetch(new Request(schemaUrl));
                 if (!response.ok) {
                     return null;
                 }
 
                 const schema = await response.json();
-                const editor = new JSONEditor(document.getElementById(editorId), {schema: schema});
+                const editor = new JSONEditor(document.getElementById(editorId), {
+                    schema: schema,
+                    ...options
+                });
                 return new Promise(function (resolve, reject) {
                     editor.on('ready', () => {
                         editor.off('ready');
@@ -53,7 +56,11 @@
                 }
 
                 if (settingsEditorPromise === null) {
-                    settingsEditorPromise = makePropertyEditor(`schema/${className}/settings.json`, "settings-editor");
+                    settingsEditorPromise = makePropertyEditor(`schema/${className}/settings.json`, "settings-editor", {
+                        disable_collapse: false,
+                        disable_edit_json: false,
+                        disable_properties: false
+                    });
                     settingsEditorPromise.className = className;
                 }
 
@@ -102,8 +109,8 @@
                 if (list.length > 0) {
                     list.selectedIndex = 0;
                 } else {
-                    await setEditorDefaultValue();
                     list.selectedIndex = -1;
+                    await setEditorDefaultValue();
                 }
 
                 list.dispatchEvent(new Event('change'));
@@ -137,8 +144,8 @@
                 if (scheduleList.length > 0) {
                     scheduleList.selectedIndex = Math.max(0, index - 1);
                 } else {
-                    scheduleList.selectedIndex = -1;
                     setScheduleEditorValue(scheduleDefaultValue);
+                    scheduleList.selectedIndex = -1;
                 }
 
                 scheduleList.dispatchEvent(new Event('change'));
@@ -222,6 +229,8 @@
                 collectionList.dispatchEvent(new Event('change'));
             });
             collectionSaveButton.addEventListener("click", async () => {
+                const oldIdentifier = collectionList.value;
+
                 if (settingsEditorPromise === null) {
                     return;
                 }
@@ -236,8 +245,6 @@
 
                 let collection = collectionEditor.getValue();
                 collection.settings = settingsEditor.getValue();
-
-                const oldIdentifier = collectionList.value;
                 const index = collections.findIndex(item => item.identifier === oldIdentifier);
                 const response = await fetch(index >= 0 ?
                     new Request(`/collections?identifier=${oldIdentifier}`,

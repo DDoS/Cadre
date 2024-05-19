@@ -86,7 +86,6 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
     max-width: 300px;
 }
 
@@ -97,17 +96,32 @@ body {
     flex-direction: column;
     align-self: stretch;
 
-    .je-object__title {
-        display: none;
+    .je-object__container {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    > .je-object__container {
+        > .je-object__title {
+            display: none;
+        }
+
+        > .je-object__controls {
+            display: none;
+        }
+
+        > .je-indented-panel {
+            padding: 0;
+            margin: 0;
+        }
     }
 
     .je-object__controls {
-        display: none;
-    }
-
-    > .je-object__container > .je-indented-panel {
-        padding: 0;
+        display: flex;
+        flex-direction: row;
         margin: 0;
+        gap: 4px;
     }
 
     .je-indented-panel {
@@ -119,11 +133,18 @@ body {
             align-items: stretch;
             gap: 4px;
         }
+
+        .je-switcher {
+            background-color: revert;
+            font-style: revert;
+            font-weight: revert;
+        }
     }
 
     .form-control {
         display: flex;
         flex-direction: row;
+        align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
 

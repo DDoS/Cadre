@@ -68,6 +68,9 @@ class AmazonPhotosCollectionProcess(CollectionProcess):
             else:
                 updated_count += 1
 
+            favorite = node['settings.favorite']
+            favorite = False if pd.isna(favorite) else bool(favorite)
+
             content_date: pd.Timestamp = node['contentDate']
             capture_date = None if pd.isna(content_date) else content_date.to_pydatetime().replace(tzinfo=None).astimezone()
             with db:
@@ -77,11 +80,12 @@ class AmazonPhotosCollectionProcess(CollectionProcess):
                     'format': None,
                     'width': node['image.width'],
                     'height': node['image.height'],
+                    'favorite': favorite,
                     'capture_date': capture_date
                 }
-                photo_id, = db.execute('INSERT INTO photos VALUES(:photo_id, :collection_id, 0, NULL, :format, :width, :height, NULL, :capture_date) '
-                                       'ON CONFLICT DO UPDATE SET format = :format, width = :width, height = :height, capture_date = :capture_date '
-                                       'RETURNING id', photos_data).fetchone()
+                photo_id, = db.execute('INSERT INTO photos VALUES(:photo_id, :collection_id, 0, NULL, :format, :width, :height, :favorite, :capture_date) '
+                                       'ON CONFLICT DO UPDATE SET format = :format, width = :width, height = :height, favorite = :favorite, '
+                                       'capture_date = :capture_date RETURNING id', photos_data).fetchone()
 
                 azp_data = {
                     'photo_id': photo_id,

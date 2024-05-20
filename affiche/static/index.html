@@ -60,14 +60,7 @@
                 optionsHeaderIcon.classList.toggle("affiche-options-header__icon--opened");
             });
 
-            const getStatus = async () => {
-                const response = await fetch(new Request("/status"));
-                if (!response.ok) {
-                    return;
-                }
-
-                const statusData = await response.json();
-
+            const setStatus = statusData => {
                 isBusy = false;
                 let status = "Display status is unknown.";
                 switch (statusData.status) {
@@ -110,8 +103,9 @@
                     previewImageGroup.style.display = "none";
                 }
             };
-            getStatus();
-            setInterval(getStatus, 3000);
+
+            const statusEvents = new EventSource("status");
+            statusEvents.onmessage = event => setStatus(JSON.parse(event.data));
 
             const setExpoLink = async () => {
                 const response = await fetch(new Request("/expo"));

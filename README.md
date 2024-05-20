@@ -111,7 +111,7 @@ you can copy your favorite photos. If you need raw photo format support, checkou
 
 List all collections by `GET`ing from `/collections`.
 Create a collection by `PUT`ting to `/collections` a JSON object like so:
-```json
+```jsonc
 {
     "identifier": "my_collection",
     "display_name": "My Collection",
@@ -119,7 +119,7 @@ Create a collection by `PUT`ting to `/collections` a JSON object like so:
     "enabled": true,
     "class_name": "FileSystemCollection",
     "settings": {
-        // ...
+        // See below
     }
 }
 ```
@@ -141,7 +141,7 @@ Optionally uses [Cru](expo/cru) if it's been built.
 Does not support the `favorite` filter.
 
 Settings:
-```json
+```jsonc
 {
     "root_path": "<path to your local photos folder>"
 }
@@ -154,7 +154,7 @@ Uses an unofficial [Amazon Photos Python API](https://github.com/trevorhobenshie
 with a few improvements).
 
 Settings:
-```json
+```jsonc
 {
     "user_agent": "<User agent string from the browser used to login to Amazon Photos>",
     "cookies": {
@@ -166,7 +166,7 @@ Settings:
 ### Scan
 
 Immediately trigger a collection scan by `POST`ing to `/scan` a JSON object like so:
-```json
+```jsonc
 {
     "identifier": "<collection identifier>",
     "delay": 0
@@ -183,7 +183,7 @@ target hostname. It will be compared against the original hostname and the exter
 if they're different (ex.: `localhost` and `affiche.local`).
 
 The JSON format is:
-```json
+```jsonc
 {
     "identifier": "my_schedule",
     "display_name": "My Schedule",
@@ -193,7 +193,7 @@ The JSON format is:
     "filter": "<filter expression>",
     "order": "<order enum name>",
     "affiche_options": {
-        // ...
+        // Coming soon!
     }
 }
 ```
@@ -245,7 +245,7 @@ After all images have been displayed once, restart the cycle. Images without a c
 ### Refresh
 
 Immediately trigger a schedule by `POST`ing to `/refresh` a JSON object like so:
-```json
+```jsonc
 {
     "identifier": "<schedule identifier>",
     "delay": 0

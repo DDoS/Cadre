@@ -10,7 +10,7 @@ from logging.config import dictConfig
 from urllib.parse import unquote, urlsplit
 from urllib.request import urlopen, urlretrieve
 
-from flask import Flask, request, redirect, send_file, url_for
+from flask import Flask, Response, request, redirect, send_file, stream_with_context, url_for
 from werkzeug.utils import secure_filename
 import requests
 
@@ -104,30 +104,28 @@ def setup_app_config(app: Flask):
         app.config['EXPO_ADDRESS'] = expo_address
 
 
+display_writer_update_lock = threading.Condition()
 DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
 DisplayWriterSubStatus = Enum('DisplayWriterSubStatus', ['NONE', 'LAUNCHING', 'CONVERTING', 'DISPLAYING'])
 display_writer_last_status = DisplayWriterStatus.READY
 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
-
 display_writer_last_preview: Path = None
-display_writer_preview_lock = threading.Lock()
 
-def update_display_writer_preview(preview_path: Path):
+def update_display_writer_preview_locked(preview_path: Path):
     global display_writer_last_preview
 
     try:
         if not preview_path.exists():
             return
 
-        with display_writer_preview_lock:
-            if display_writer_last_preview is not None:
-                if display_writer_last_preview.samefile(preview_path):
-                    return
+        if display_writer_last_preview is not None:
+            if display_writer_last_preview.samefile(preview_path):
+                return
 
-                display_writer_last_preview.unlink(missing_ok=True)
-                display_writer_last_preview = None
+            display_writer_last_preview.unlink(missing_ok=True)
+            display_writer_last_preview = None
 
-            display_writer_last_preview = preview_path
+        display_writer_last_preview = preview_path
     except Exception:
         affiche_logger.exception('Failed to update preview')
         if preview_path is not None:
@@ -148,34 +146,43 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
             process = subprocess.Popen([*command, image_path, '--options', options_string, '--preview', preview_path],
                                         stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
 
-            display_writer_last_status = DisplayWriterStatus.BUSY
-            display_writer_last_sub_status = DisplayWriterSubStatus.LAUNCHING
+            with display_writer_update_lock:
+                display_writer_last_status = DisplayWriterStatus.BUSY
+                display_writer_last_sub_status = DisplayWriterSubStatus.LAUNCHING
+                display_writer_update_lock.notify_all()
+
             while True:
                 output_line = process.stdout.readline()
                 if output_line.startswith('Status: '):
                     status_string = output_line.split()[-1]
                     try:
-                        display_writer_last_sub_status = DisplayWriterSubStatus[status_string]
+                        with display_writer_update_lock:
+                            display_writer_last_sub_status = DisplayWriterSubStatus[status_string]
+                            if display_writer_last_sub_status == DisplayWriterSubStatus.DISPLAYING:
+                                update_display_writer_preview_locked(preview_path)
+                            display_writer_update_lock.notify_all()
                     except Exception:
                         pass
-
-                if display_writer_last_sub_status == DisplayWriterSubStatus.DISPLAYING:
-                    update_display_writer_preview(preview_path)
 
                 exit_code = process.poll()
                 if exit_code is not None:
                     break
 
-            display_writer_last_status = DisplayWriterStatus.READY if \
-                exit_code == 0 else DisplayWriterStatus.FAILED
-            display_writer_last_sub_status = DisplayWriterSubStatus.NONE
+            with display_writer_update_lock:
+                display_writer_last_status = DisplayWriterStatus.READY if \
+                    exit_code == 0 else DisplayWriterStatus.FAILED
+                display_writer_last_sub_status = DisplayWriterSubStatus.NONE
+                update_display_writer_preview_locked(preview_path)
+                display_writer_update_lock.notify_all()
         except Exception:
-            display_writer_last_status = DisplayWriterStatus.FAILED
+            with display_writer_update_lock:
+                display_writer_last_status = DisplayWriterStatus.FAILED
+                display_writer_last_sub_status = DisplayWriterSubStatus.NONE
+                update_display_writer_preview_locked(preview_path)
+                display_writer_update_lock.notify_all()
             affiche_logger.exception('Failed to refresh display')
             process.kill()
         finally:
-            display_writer_last_sub_status = DisplayWriterSubStatus.NONE
-            update_display_writer_preview(preview_path)
             image_path.unlink(missing_ok=True)
 
     try:
@@ -214,8 +221,6 @@ app.secret_key = random_string()
 
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
-    global display_writer_last_status
-
     if request.method == 'GET':
         return app.send_static_file('index.html')
 
@@ -266,26 +271,36 @@ def upload_file():
 
 @app.route('/status')
 def status():
-    global display_writer_last_status
-    global display_writer_last_sub_status
-    global display_writer_last_preview
+    def get_event_data(wait: bool = True):
+        with display_writer_update_lock:
+            if wait:
+                display_writer_update_lock.wait()
 
-    response = {
-        'status': display_writer_last_status.name,
-        'subStatus': display_writer_last_sub_status.name
-    }
+            data = {
+                'status': display_writer_last_status.name,
+                'subStatus': display_writer_last_sub_status.name
+            }
 
-    with display_writer_preview_lock:
-        if display_writer_last_preview:
-            response['preview'] = url_for('preview', file_name=display_writer_last_preview.name)
+            if display_writer_last_preview:
+                data['preview'] = url_for('preview', file_name=display_writer_last_preview.name)
 
-    return response, 200
+            return f'data: {json.dumps(data)}\n\n'
+
+    @stream_with_context
+    def event_generator():
+        yield get_event_data(False)
+
+        try:
+            while True:
+                yield get_event_data()
+        except GeneratorExit:
+            app.logger.debug('Client disconnected')
+
+    return Response(event_generator(), mimetype='text/event-stream')
 
 @app.route('/preview/<file_name>')
 def preview(file_name: str):
-    global display_writer_last_preview
-
-    with display_writer_preview_lock:
+    with display_writer_update_lock:
         if not display_writer_last_preview or display_writer_last_preview.name != file_name:
             return '', 204
 

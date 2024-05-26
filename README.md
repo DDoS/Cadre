@@ -158,7 +158,9 @@ Settings:
 {
     "user_agent": "<User agent string from the browser used to login to Amazon Photos>",
     "cookies": {
-        // See https://github.com/trevorhobenshield/amazon_photos?tab=readme-ov-file#setup
+        // Copy cookies here as a dictionary. It's not known which cookies are required,
+        // if you're missing some you might eventually get an authentication error.
+        // See also: https://github.com/trevorhobenshield/amazon_photos?tab=readme-ov-file#setup
     }
 }
 ```

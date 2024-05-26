@@ -274,7 +274,7 @@ def status():
     def get_event_data(wait: bool = True):
         with display_writer_update_lock:
             if wait:
-                display_writer_update_lock.wait()
+                display_writer_update_lock.wait(2 * 60)
 
             data = {
                 'status': display_writer_last_status.name,

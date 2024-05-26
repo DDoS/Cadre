@@ -104,8 +104,39 @@
                 }
             };
 
-            const statusEvents = new EventSource("status");
-            statusEvents.onmessage = event => setStatus(JSON.parse(event.data));
+            let statusEvents = null;
+            const listenStatusEvents = () => {
+                statusEvents = new EventSource("status");
+
+                const resetEvents = () => {
+                    statusEvents.close();
+                    statusEvents = null;
+                    console.log("Status events error or timeout: recreating...")
+                    listenStatusEvents();
+                };
+
+                const oneMinute = 60 * 1000;
+
+                let watchdogTimer = 0;
+                const resetWatchdogTimer = () => {
+                    if (watchdogTimer > 0) {
+                        clearTimeout(watchdogTimer);
+                    }
+                    watchdogTimer = setTimeout(resetEvents, 3 * oneMinute);
+                };
+                resetWatchdogTimer();
+
+                statusEvents.addEventListener("message", event => {
+                    setStatus(JSON.parse(event.data));
+                    resetWatchdogTimer();
+                });
+            };
+            window.addEventListener('beforeunload', () => {
+                if (statusEvents !== null) {
+                    statusEvents.close();
+                }
+            });
+            listenStatusEvents();
 
             const setExpoLink = async () => {
                 const response = await fetch(new Request("/expo"));
@@ -154,54 +185,56 @@
                             <div class="affiche-options-header__icon" id="options-header-icon"></div>
                             <div class="affiche-options-header__title" id="options-header-title">Options</div>
                         </div>
-                        <div class="affiche-options" id="options-foldout">
-                            <div class="affiche-option">
-                                <label for="rotation">Orientation:</label>
-                                <select name="rotation" id="rotation">
-                                    <option value="automatic">Automatic</option>
-                                    <option value="landscape">Landscape</option>
-                                    <option value="portrait">Portrait</option>
-                                    <option value="landscape_upside_down">Landscape upside-down</option>
-                                    <option value="portrait_upside_down">Portrait upside-down</option>
-                                </select>
-                            </div>
-                            <div class="affiche-option">
-                                <label for="dynamic-range">Dynamic range:</label>
-                                <input type="number" id="dynamic-range" name="dynamic_range" step="0.01" placeholder="ex: 0.95" />
-                            </div>
-                            <div class="affiche-option">
-                                <label for="exposure">Exposure:</label>
-                                <input type="number" id="exposure" name="exposure" step="0.01" placeholder="ex: 1.5" />
-                            </div>
-                            <div class="affiche-option">
-                                <label for="brightness">Brightness:</label>
-                                <input type="number" id="brightness" name="brightness" step="0.1" placeholder="ex: 10" />
-                            </div>
-                            <div class="affiche-option">
-                                <label for="contrast">Contrast:</label>
-                                <input type="number" id="contrast" name="contrast" step="0.01" placeholder="ex: 0.6" />
-                            </div>
-                            <div class="affiche-option">
-                                <label for="sharpening">Sharpening:</label>
-                                <input type="number" id="sharpening" name="sharpening" step="0.1" placeholder="ex: 4" />
-                            </div>
-                            <div class="affiche-option">
-                                <label for="clipped-chroma-recovery">Clipped chroma recovery:</label>
-                                <input type="number" id="clipped-chroma-recovery" name="clipped_chroma_recovery" step="0.01" placeholder="ex: 1" />
-                            </div>
-                            <div class="affiche-option">
-                                <label for="error-attenuation">Dither error attenuation:</label>
-                                <input type="number" id="error-attenuation" name="error_attenuation" step="0.01" placeholder="ex: 0.1" />
+                        <div class="affiche-options-foldout" id="options-foldout">
+                            <div class="affiche-options affiche-sub-content">
+                                <div class="affiche-option">
+                                    <label for="rotation">Orientation:</label>
+                                    <select name="rotation" id="rotation">
+                                        <option value="automatic">Automatic</option>
+                                        <option value="landscape">Landscape</option>
+                                        <option value="portrait">Portrait</option>
+                                        <option value="landscape_upside_down">Landscape upside-down</option>
+                                        <option value="portrait_upside_down">Portrait upside-down</option>
+                                    </select>
+                                </div>
+                                <div class="affiche-option">
+                                    <label for="dynamic-range">Dynamic range:</label>
+                                    <input type="number" id="dynamic-range" name="dynamic_range" step="0.01" placeholder="ex: 0.95" />
+                                </div>
+                                <div class="affiche-option">
+                                    <label for="exposure">Exposure:</label>
+                                    <input type="number" id="exposure" name="exposure" step="0.01" placeholder="ex: 1.5" />
+                                </div>
+                                <div class="affiche-option">
+                                    <label for="brightness">Brightness:</label>
+                                    <input type="number" id="brightness" name="brightness" step="0.1" placeholder="ex: 10" />
+                                </div>
+                                <div class="affiche-option">
+                                    <label for="contrast">Contrast:</label>
+                                    <input type="number" id="contrast" name="contrast" step="0.01" placeholder="ex: 0.6" />
+                                </div>
+                                <div class="affiche-option">
+                                    <label for="sharpening">Sharpening:</label>
+                                    <input type="number" id="sharpening" name="sharpening" step="0.1" placeholder="ex: 4" />
+                                </div>
+                                <div class="affiche-option">
+                                    <label for="clipped-chroma-recovery">Clipped chroma recovery:</label>
+                                    <input type="number" id="clipped-chroma-recovery" name="clipped_chroma_recovery" step="0.01" placeholder="ex: 1" />
+                                </div>
+                                <div class="affiche-option">
+                                    <label for="error-attenuation">Dither error attenuation:</label>
+                                    <input type="number" id="error-attenuation" name="error_attenuation" step="0.01" placeholder="ex: 0.1" />
+                                </div>
                             </div>
                         </div>
                     </div>
                 </form>
-                <div id="preview-image-group" class="affiche-column affiche-content-item">
+                <div class="affiche-column affiche-content-item" id="preview-image-group">
                     <img class="affiche-preview" id="preview-image" alt="On display" src=""/>
                     <div class="affiche-preview-title">Currently on display.</div>
                 </div>
             </div>
-            <div class="affiche-expo-integration" id="expo-integration" style="display: none;">
+            <div class="affiche-expo-integration affiche-sub-content" id="expo-integration" style="display: none;">
                 <a class="affiche-expo-integration__link" id="expo-link" target="_blank">Expo</a>
                 <div class="affiche-expo-refresh">
                     <label for="expo-schedule-list">Schedule:</label>

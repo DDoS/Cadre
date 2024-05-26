@@ -443,10 +443,10 @@ def _start_process(message_queue: mp.Queue, db_path: Path, id: int, identifier: 
 
         return running
 
-    schedule_iterator = croniter(schedule) if schedule else None
+    schedule_iterator = croniter(schedule, ret_type=float) if schedule else None
     def wait_for_next_update():
-        next_scheduled_time: float | None = schedule_iterator.get_next(start_time=time.time()) if \
-            schedule_iterator else None
+        next_scheduled_time: float | None = schedule_iterator.get_next(
+            start_time=datetime.now().astimezone()) if schedule_iterator else None
         update_next_update_time(next_scheduled_time)
 
         while running:

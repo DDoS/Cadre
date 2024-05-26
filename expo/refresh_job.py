@@ -123,7 +123,7 @@ class RefreshJob:
                 if not self._job:
                     return
 
-            next_date: datetime = schedule_iterator.get_next(start_time=datetime.now())
+            next_date: datetime = schedule_iterator.get_next(start_time=datetime.now().astimezone())
             refresh_job_logger.debug(f'Next refresh: {next_date.isoformat()}')
             self._job = refresh_scheduler.add_job(refresh_and_reschedule, trigger=DateTrigger(next_date),
                                                   misfire_grace_time=60, coalesce=True)
@@ -147,7 +147,7 @@ class RefreshJob:
         if not self._enabled:
             raise ValueError('Can\'t refresh a disabled job')
 
-        trigger_date = datetime.now() + timedelta(seconds=delay)
+        trigger_date = datetime.now().astimezone() + timedelta(seconds=delay)
         if self._job:
             self._job.modify(next_run_time=trigger_date)
         else:

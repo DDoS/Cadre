@@ -2,6 +2,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <html lang="en">
     <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="static/third_party/leaflet/leaflet.css" />
+        <script src="static/third_party/leaflet/leaflet.js"></script>
+        <script src="static/third_party/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
         <link rel="stylesheet" href="static/index.css">
         <script type="module">
             // Stop the form resubmission on page refresh
@@ -9,14 +13,20 @@
                 window.history.replaceState(null, null, window.location.href);
             }
 
-            const contentElement = document.getElementById("content");
-            const updateContentLayout = () => {
-                const horizontal = window.innerWidth > window.innerHeight;
-                contentElement.style.flexDirection = horizontal ? "row" : "column";
-                contentElement.style.alignItems = horizontal ? "flex-start" : "center";
+            const isApplePlatform = /Mac OS X|Macintosh|iPad|iPhone/.test(window.navigator.userAgent);
+            const isWindowsPlatform = !isApplePlatform && /Windows|Win32|Win64/.test(window.navigator.userAgent);
+
+            const updateContentLayout = elements => {
+                for (const element of elements) {
+                    const horizontal = window.innerWidth > window.innerHeight * 1.5;
+                    element.style.flexDirection = horizontal ? "row" : "column";
+                    element.style.alignItems = horizontal ? "flex-start" : "center";
+                }
             };
-            addEventListener("resize", updateContentLayout);
-            updateContentLayout();
+            const contentElement = document.getElementById("content");
+            const imageInfoElement = document.getElementById("image-info");
+            window.addEventListener("resize", () => updateContentLayout([contentElement, imageInfoElement]));
+            updateContentLayout([contentElement, imageInfoElement]);
 
             const statusText = document.getElementById("status");
             const subStatusText = document.getElementById("sub-status");
@@ -60,25 +70,67 @@
                 optionsHeaderIcon.classList.toggle("affiche-options-header__icon--opened");
             });
 
+            const imageInfoFieldsElement = document.getElementById("image-info-fields");
+
+            const infoMapElement = document.getElementById("info-map");
+
+            const leafletMapElement = document.getElementById("leaflet-map");
+            const infoMap = L.map(leafletMapElement);
+            new ResizeObserver(() => infoMap.invalidateSize()).observe(leafletMapElement);
+
+            const setMapTiles = async () => {
+                const response = await fetch(new Request("/map_tiles"));
+                if (response.ok) {
+                    const mapTiles = await response.json();
+                    L.tileLayer(mapTiles.url, mapTiles.options).addTo(infoMap);
+                }
+            };
+            setMapTiles();
+
+            var pointMarker = L.icon({
+                iconUrl: "static/third_party/phosphor/map-pin-duotone.png",
+                iconSize: [32, 32],
+                iconAnchor: [16, 32]
+            });
+            var directionMarker = L.icon({
+                iconUrl: "static/third_party/phosphor/navigation-arrow-duotone.png",
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+            const infoMapMarker = L.marker(L.latLng(0, 0), {
+                icon: pointMarker,
+                rotationOrigin: "center"
+            }).addTo(infoMap);
+
+            const mapLink = document.getElementById("map-link");
+
+            let previousStatus = null;
+            let previousSubStatus = null;
+            let previousPreview = null;
+            let previousImageInfo = null;
             const setStatus = statusData => {
-                isBusy = false;
-                let status = "Display status is unknown.";
+                let status = "Display status is unknown";
                 switch (statusData.status) {
                     case "BUSY":
-                        status = "The display is being updated. This will take a few minutes.";
+                        status = "Refreshing the display, please wait";
                         isBusy = true;
                         break
                     case "READY":
-                        status = "The display is ready for a new picture.";
+                        status = "";
+                        isBusy = false;
                         break
                     case "FAILED":
                         status = "Something went wrong when displaying your picture. " +
                                 "Make sure it's a valid image file.";
+                        isBusy = false;
                         break
                 }
-                statusText.innerHTML = status;
-                updateUploadButton();
-                updateRefreshButton();
+                if (previousStatus !== status) {
+                    statusText.innerHTML = status;
+                    updateUploadButton();
+                    updateRefreshButton();
+                    previousStatus = status;
+                }
 
                 let subStatus = "";
                 switch (statusData.subStatus) {
@@ -92,15 +144,110 @@
                         subStatus = "Drawing...";
                         break;
                 }
-                subStatusText.innerHTML = subStatus;
-                subStatusText.style.display = subStatus.length <= 0 ? 'none' : null;
+                if (previousSubStatus !== subStatus) {
+                    subStatusText.innerHTML = subStatus;
+                    subStatusText.style.display = subStatus.length <= 0 ? 'none' : null;
+                    previousSubStatus = subStatus;
+                }
 
-                if (statusData.preview) {
-                    previewImage.src = statusData.preview;
-                    previewImageGroup.style.display = null;
-                } else {
-                    previewImage.src = "";
-                    previewImageGroup.style.display = "none";
+                if (previousPreview !== statusData.preview) {
+                    if (statusData.preview) {
+                        previewImage.src = statusData.preview;
+                        previewImageGroup.style.display = null;
+                        previousPreview = statusData.preview;
+                    } else {
+                        previewImage.src = "";
+                        previewImageGroup.style.display = "none";
+                        previousPreview = null;
+                    }
+                }
+
+                const shallowObjectEquals = (a, b) => a === null ? b === null : b !== null &&
+                        Object.keys(a).length === Object.keys(b).length &&
+                        Object.keys(a).every(key => b.hasOwnProperty(key) && a[key] === b[key]);
+                if (!shallowObjectEquals(previousImageInfo, statusData.imageInfo)) {
+                    if (statusData.imageInfo) {
+                        imageInfoElement.style.display = null;
+
+                        let hasAtLeastOneInfoField = false
+                        for (const fieldElement of imageInfoFieldsElement.
+                                getElementsByClassName("affiche-info__field-value")) {
+                            let fieldValue = statusData.imageInfo[fieldElement.id];
+                            if (fieldValue) {
+                                if (fieldElement.id === "captureDateTime") {
+                                    fieldValue = new Date(fieldValue);
+                                }
+
+                                fieldElement.innerHTML = fieldValue.toLocaleString();
+                                fieldElement.parentElement.style.display = null;
+                                hasAtLeastOneInfoField = true;
+                            } else {
+                                fieldElement.parentElement.style.display = "none";
+                            }
+                        }
+                        imageInfoFieldsElement.style.display = hasAtLeastOneInfoField ? null : "none";
+
+                        if (statusData.imageInfo.gpsLongitude && statusData.imageInfo.gpsLatitude) {
+                            let popup = "";
+
+                            if (statusData.imageInfo.gpsAltitude) {
+                                popup += `Altitude: ${statusData.imageInfo.gpsAltitude.toFixed(2).toLocaleString()} m<br>`;
+                            }
+
+                            if (statusData.imageInfo.gpsDirection) {
+                                popup += `Heading: ${statusData.imageInfo.gpsDirection.toFixed().toLocaleString()}°`;
+                                switch (statusData.imageInfo.gpsZeroDirection) {
+                                    case "geographic":
+                                        popup += " (true north)";
+                                        break;
+                                    case "magnetic":
+                                        popup += " (magnetic north)";
+                                        break;
+                                }
+
+                                popup += "<br>";
+
+                                infoMapMarker.setIcon(directionMarker);
+                                infoMapMarker.setRotationAngle(45 + statusData.imageInfo.gpsDirection);
+                            } else {
+                                infoMapMarker.setIcon(pointMarker);
+                                infoMapMarker.setRotationAngle(0);
+                            }
+
+                            if (statusData.imageInfo.gpsDate) {
+                                popup += `Timestamp: ${new Date(statusData.imageInfo.gpsDate).toDateString()}<br>`;
+                            } else if (statusData.imageInfo.gpsDateTime) {
+                                popup += `Timestamp: ${new Date(statusData.imageInfo.gpsDateTime).toUTCString()}<br>`;
+                            }
+
+                            if (popup.length > 0) {
+                                infoMapMarker.bindPopup(popup, {offset: [0, -8], maxWidth: 200});
+                            } else {
+                                infoMapMarker.unbindPopup();
+                            }
+
+                            const target = L.latLng(statusData.imageInfo.gpsLatitude, statusData.imageInfo.gpsLongitude);
+                            infoMapMarker.setLatLng(target);
+                            infoMap.setView(target, 7);
+
+                            if (isApplePlatform) {
+                                mapLink.href = `maps:?ll=${statusData.imageInfo.gpsLatitude},${statusData.imageInfo.gpsLongitude}&q=Photo`;
+                            } else if (isWindowsPlatform) {
+                                mapLink.href = `bingmaps:?collection=point.${statusData.imageInfo.gpsLatitude}_${statusData.imageInfo.gpsLongitude}_Photo`
+                            } else {
+                                mapLink.href = `geo:0,0?q=${statusData.imageInfo.gpsLatitude},${statusData.imageInfo.gpsLongitude}`
+                            }
+
+                            infoMapElement.style.display = null;
+                        } else {
+                            infoMapElement.style.display = "none";
+                        }
+
+                        previousImageInfo = statusData.imageInfo;
+                    } else {
+                        imageInfoElement.style.display = "none";
+                        previousImageInfo = null;
+                    }
                 }
             };
 
@@ -138,9 +285,10 @@
             });
             listenStatusEvents();
 
+            const expoRefreshControls = document.getElementById("expo-refresh-controls");
             const setExpoLink = async () => {
                 const response = await fetch(new Request("/expo"));
-                if (!response.ok || response.status == 204) {
+                if (!response.ok || response.status === 204) {
                     return;
                 }
 
@@ -155,15 +303,23 @@
                     expoScheduleList.add(new Option(displayName || identifier, identifier));
                 }
 
-                expoRefreshButton.addEventListener("click", async () =>
-                    await fetch(new Request(`http://${expoAddress}/refresh`, {
-                        method: "POST",
-                        headers: {"Content-Type": "application/json"},
-                        body: JSON.stringify({
-                            "identifier": expoScheduleList.value
-                        })
-                    }))
-                );
+                expoRefreshButton.addEventListener("click", async () => {
+                    let statusClass;
+                    if ((await fetch(new Request(`http://${expoAddress}/refresh`, {
+                                method: "POST",
+                                headers: {"Content-Type": "application/json"},
+                                body: JSON.stringify({"identifier": expoScheduleList.value})
+                            }))).ok) {
+                        statusClass = "affiche-icon--ok";
+                    } else {
+                        statusClass = "affiche-icon--error";
+                    }
+
+                    expoRefreshControls.classList.add(statusClass);
+                    setTimeout(() => {
+                        expoRefreshControls.classList.remove(statusClass);
+                    }, 5000);
+                });
 
                 const expoIntegration = document.getElementById("expo-integration")
                 expoIntegration.style.display = null;
@@ -177,9 +333,12 @@
             <div class="affiche-status" id="status"></div>
             <div class="affiche-sub-status" id="sub-status"></div>
             <div class="affiche-content" id="content">
-                <form class="affiche-column affiche-content-item" method="post" enctype="multipart/form-data">
-                    <input class="affiche-file-input" id="file-input" type="file" name="file">
-                    <button class="affiche-submit" id="upload-button" type="submit" name="submit" value="upload">Upload</button>
+                <form class="affiche-content-form" method="post" enctype="multipart/form-data">
+                    <div class="affiche-file">
+                        <label class="affiche-file__label" for="file-input">Choose a picture</label>
+                        <input class="affiche-file__input" id="file-input" type="file" name="file">
+                    </div>
+                    <button class="affiche-submit" id="upload-button" type="submit" value="upload">Upload</button>
                     <div class="affiche-options-collapsible">
                         <div class="affiche-options-header" id="options-header">
                             <div class="affiche-options-header__icon" id="options-header-icon"></div>
@@ -188,8 +347,8 @@
                         <div class="affiche-options-foldout" id="options-foldout">
                             <div class="affiche-options affiche-sub-content">
                                 <div class="affiche-option">
-                                    <label for="rotation">Orientation:</label>
-                                    <select name="rotation" id="rotation">
+                                    <label for="rotation">Orientation</label>
+                                    <select name="options.rotation" id="rotation">
                                         <option value="automatic">Automatic</option>
                                         <option value="landscape">Landscape</option>
                                         <option value="portrait">Portrait</option>
@@ -198,45 +357,90 @@
                                     </select>
                                 </div>
                                 <div class="affiche-option">
-                                    <label for="dynamic-range">Dynamic range:</label>
-                                    <input type="number" id="dynamic-range" name="dynamic_range" step="0.01" placeholder="ex: 0.95" />
+                                    <label for="dynamic-range">Dynamic range</label>
+                                    <input type="number" id="dynamic-range" name="options.dynamic_range" step="0.01" placeholder="ex: 0.95" />
                                 </div>
                                 <div class="affiche-option">
-                                    <label for="exposure">Exposure:</label>
-                                    <input type="number" id="exposure" name="exposure" step="0.01" placeholder="ex: 1.5" />
+                                    <label for="exposure">Exposure</label>
+                                    <input type="number" id="exposure" name="options.exposure" step="0.01" placeholder="ex: 1.5" />
                                 </div>
                                 <div class="affiche-option">
-                                    <label for="brightness">Brightness:</label>
-                                    <input type="number" id="brightness" name="brightness" step="0.1" placeholder="ex: 10" />
+                                    <label for="brightness">Brightness</label>
+                                    <input type="number" id="brightness" name="options.brightness" step="0.1" placeholder="ex: 10" />
                                 </div>
                                 <div class="affiche-option">
-                                    <label for="contrast">Contrast:</label>
-                                    <input type="number" id="contrast" name="contrast" step="0.01" placeholder="ex: 0.6" />
+                                    <label for="contrast">Contrast</label>
+                                    <input type="number" id="contrast" name="options.contrast" step="0.01" placeholder="ex: 0.6" />
                                 </div>
                                 <div class="affiche-option">
-                                    <label for="sharpening">Sharpening:</label>
-                                    <input type="number" id="sharpening" name="sharpening" step="0.1" placeholder="ex: 4" />
+                                    <label for="sharpening">Sharpening</label>
+                                    <input type="number" id="sharpening" name="options.sharpening" step="0.1" placeholder="ex: 4" />
                                 </div>
                                 <div class="affiche-option">
-                                    <label for="clipped-chroma-recovery">Clipped chroma recovery:</label>
-                                    <input type="number" id="clipped-chroma-recovery" name="clipped_chroma_recovery" step="0.01" placeholder="ex: 1" />
+                                    <label for="clipped-chroma-recovery">Clipped chroma recovery</label>
+                                    <input type="number" id="clipped-chroma-recovery" name="options.clipped_chroma_recovery" step="0.01" placeholder="ex: 1" />
                                 </div>
                                 <div class="affiche-option">
-                                    <label for="error-attenuation">Dither error attenuation:</label>
-                                    <input type="number" id="error-attenuation" name="error_attenuation" step="0.01" placeholder="ex: 0.1" />
+                                    <label for="error-attenuation">Dither error attenuation</label>
+                                    <input type="number" id="error-attenuation" name="options.error_attenuation" step="0.01" placeholder="ex: 0.1" />
                                 </div>
                             </div>
                         </div>
                     </div>
                 </form>
-                <div class="affiche-column affiche-content-item" id="preview-image-group">
-                    <img class="affiche-preview" id="preview-image" alt="On display" src=""/>
-                    <div class="affiche-preview-title">Currently on display.</div>
+                <div class="affiche-preview" id="preview-image-group" style="display: none;">
+                    <img class="affiche-preview__image" id="preview-image" alt="On display" src=""/>
+                    <div class="affiche-preview__title">On display</div>
+                </div>
+            </div>
+            <div class="affiche-info affiche-content" id="image-info" style="display: none;">
+                <div class="affiche-info-map" id="info-map" style="display: none;">
+                    <div class="affiche-info-map__leaflet" id="leaflet-map"></div>
+                    <div class="affiche-info-map__title">Location</div>
+                    <a class="affiche-info-map__link" id="map-link">Open in maps app</a>
+                </div>
+                <div class="affiche-info__fields affiche-sub-content" id="image-info-fields">
+                    <div class="affiche-info__field">
+                        <label>Collection</label>
+                        <div class="affiche-info__field-value" id="collection"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Path</label>
+                        <div class="affiche-info__field-value" id="path"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Date & time</label>
+                        <div class="affiche-info__field-value" id="captureDateTime"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Camera</label>
+                        <div class="affiche-info__field-value" id="cameraMakeAndModel"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Lens</label>
+                        <div class="affiche-info__field-value" id="lensMakeAndModel"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Aperture</label>
+                        <div class="affiche-info__field-value" id="apertureSetting"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Focal length</label>
+                        <div class="affiche-info__field-value" id="focalLengthSetting"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Exposure</label>
+                        <div class="affiche-info__field-value" id="exposureSetting"></div>
+                    </div>
+                    <div class="affiche-info__field">
+                        <label>Sensitivity</label>
+                        <div class="affiche-info__field-value" id="isoSetting"></div>
+                    </div>
                 </div>
             </div>
             <div class="affiche-expo-integration affiche-sub-content" id="expo-integration" style="display: none;">
                 <a class="affiche-expo-integration__link" id="expo-link" target="_blank">Expo</a>
-                <div class="affiche-expo-refresh">
+                <div class="affiche-expo-refresh" id="expo-refresh-controls">
                     <label for="expo-schedule-list">Schedule:</label>
                     <select class="affiche-expo-refresh__schedule_list" id="expo-schedule-list" name="expo-schedules"></select>
                     <button class="affiche-expo-refresh__button" id="expo-refresh-button">Refresh</button>

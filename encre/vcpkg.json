@@ -9,5 +9,10 @@
         "glm",
         "pybind11",
         "argparse"
-    ]
-  }
+    ],
+    "vcpkg-configuration": {
+        "overlay-ports": [
+            "../vcpkg-overlays/python3"
+        ]
+    }
+}

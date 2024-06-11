@@ -10,6 +10,7 @@ It's split up into multiple components:
 - [Encre](#encre): convert image files to a native e-ink display palette
 - [Affiche](#affiche): Local web interface
 - [Expo](#expo): Automatic photo updates
+- [Cru](#cru): Image metadata loader
 
 ## Encre
 
@@ -28,8 +29,8 @@ to the originals are possible.
 
 ### Build
 
-- Install Vcpkg
 - Install pkg-config
+- Install Python (3.9 or newer)
 - Install libvips (8.15.1 or newer)
 - Run `cmake --workflow --preset release`
 
@@ -37,7 +38,7 @@ Other dependencies are installed by Vcpkg.
 
 You might have to upgrade CMake, Python or your C++ compiler, the logs should tell you.
 
-There are additional notes specific to the "Raspberry PI Zero 2 W" [here](encre/rpi_build_notes.txt).
+There are additional notes specific to the "Raspberry Pi Zero 2 W" [here](encre/rpi_build_notes.txt).
 
 ### Running
 
@@ -67,6 +68,10 @@ privileges. The simplest solution is to run `sudo sysctl -w net.ipv4.ip_unprivil
 
 The server should be available at the host's LAN address on port `80`.
 
+If you want image metadata support (EXIF information and geolocation), you need to build [Cru](#cru).
+
+[<img src="images/affiche_screenshot.png" width="400"/>](images/affiche_screenshot.png)
+
 ### Configuration
 
 Copy the [default config](affiche/default_config.json) and name it `config.json`.
@@ -74,10 +79,34 @@ In this file you can overwrite the following fields:
 - `TEMP_PATH`: where to write the temporary files, absolute or relative to the server executable
 - `DISPLAY_WRITER_COMMAND`: the command line to run for writing a new image to the display as a list of arguments.
 Must accept the `--options <json>` and `--preview <path>` arguments to pass in the display options and the preview image output path.
+- `MAP_TILES`: URL and options for [Leaflet `L.tileLayer()` constructor](https://leafletjs.com/reference.html#tilelayer-l-tilelayer).
+Lets you customize the map shown by Affiche. If you want an English map, I recommend the
+[Thunderforest Atlas tiles](https://www.thunderforest.com/maps/atlas/) (free account required to obtain an API key).
 - `EXPO_ADDRESS`: Hostname and optional port suffix for the Expo server. Must be externally reachable (i.e.: `affiche.local` instead
 of `localhost`). Optional, can be `null` to disable Expo integration. If empty, then default to the local machine network name.
 
-[<img src="images/affiche_screenshot.png" width="400"/>](images/affiche_screenshot.jpeg)
+### Tips & Help
+
+#### You want Affiche (and Expo) to start automatically when the server boots
+
+You can use Cron to launch on boot. Edit the user's crontab using `crontab -e` and add
+`@reboot cd ~/Cadre/affiche && bash start.sh; cd ~/Cadre/expo && bash start.sh`
+(skip the part after `;` if you're not using Expo). You will need to use `bash -l` if
+you have environment variables required by Affiche (or Expo) in your bash profile
+(such as if you followed the Encre Raspberry Pi build instructions).
+
+#### The connection to your Raspberry Pi is unreliable, especially when using the `.local` address
+
+Try disabling Wifi power management using `iwconfig wlan0 power off`. You can make this change
+persistent on reboot by adding `/sbin/iwconfig wlan0 power off` to `/etc/rc.local`.
+
+#### The Expo link is wrong
+
+More specifically, your local address is `cadre.local`, and clicking the Expo link opens `cadre`,
+which fails to resolve.
+
+Make sure that you have the `.local` address in the `/etc/hosts` file, and that it appears before the hostname.
+For example: `127.0.1.1	cadre.local cadre`
 
 ##  Expo
 
@@ -87,8 +116,8 @@ This is an optional component. It's a separate service which maintains a databas
 and periodically posts one to Affiche.
 
 Create a Python virtual environment, and install the [requirements](expo/requirements.txt) using `pip`.
-Additional requirements are also needed for the follow features:
-- `FileSystemCollection`: [requirements-fs](expo/requirements-fs.txt)
+Additional requirements are also needed for the following features:
+- `FileSystemCollection`: [Cru](#cru)
 - `AmazonPhotosCollection`: [requirements-azp](expo/requirements-azp.txt)
 
 Start the server using `start.sh`. Use `stop.sh` if you need to stop the server when it's running in the background.
@@ -107,7 +136,7 @@ In this file you can overwrite the following fields:
 ### Collections
 
 You can use this by running Expo on your photo NAS, or on a Raspberry Pi with an SMB share where
-you can copy your favorite photos. If you need raw photo format support, checkout [Cru](expo/cru).
+you can copy your favorite photos.
 
 List all collections by `GET`ing from `/collections`.
 Create a collection by `PUT`ting to `/collections` a JSON object like so:
@@ -135,10 +164,7 @@ except all fields are now optional. You can also query using `GET`, and delete 
 
 #### FileSystemCollection
 
-Scan the `root_path` for known image formats. Uses `libvips` through the `pyvips` wrapper to load image headers.
-Optionally uses [Cru](expo/cru) if it's been built.
-
-Does not support the `favorite` filter.
+Requires [Cru](#cru) to process images. Scan the `root_path` for known image formats. Does not support the `favorite` filter.
 
 Settings:
 ```jsonc
@@ -158,9 +184,16 @@ Settings:
 {
     "user_agent": "<User agent string from the browser used to login to Amazon Photos>",
     "cookies": {
-        // Copy cookies here as a dictionary. It's not known which cookies are required,
+        // Copy cookies here as a dictionary. It's not known exactly which cookies are required,
         // if you're missing some you might eventually get an authentication error.
-        // See also: https://github.com/trevorhobenshield/amazon_photos?tab=readme-ov-file#setup
+        // This list just an example, since the cookie names are region specific (amazon.ca shown).
+        // See: https://github.com/trevorhobenshield/amazon_photos?tab=readme-ov-file#setup
+        "at-acbca": "***",
+        "session-id": "***",
+        "ubid-acbca": "***",
+        "sess-at-acbca": "***",
+        "sst-acbca": "***",
+        "x-acbca": "***"
     }
 }
 ```
@@ -255,3 +288,19 @@ Immediately trigger a schedule by `POST`ing to `/refresh` a JSON object like so:
 ```
 - `identifier` is a schedule identifier
 - `delay` a delay in seconds (float), is optional and defaults to `0`
+
+## Cru
+
+Cru is a native Python module for quickly loading image metadata, like resolution and tags.
+It also does some processing and pretty formatting for easier consumption.
+
+### Build
+
+- Follow the Encre build instructions first, that'll make sure you have everything installed
+- Run `cmake --workflow --preset release`
+
+### Running
+
+The filesystem collection should automatically detect and import the module.
+If you see "Cru module not found" in the logs, check that the module can be
+indeed be loaded from `<repo path>/cru/build/release` by Python.

@@ -4,33 +4,25 @@ import logging
 import sqlite3
 from pathlib import Path, PurePath, PurePosixPath
 from typing import Any, Callable, Generator
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 
 from marshmallow import Schema, fields
 
-from ._base import Collection, CollectionProcess
+from ._base import PhotoInfo, Collection, CollectionProcess
 
 
 logger = logging.getLogger('')
 
 
-pyvips_available = False
-try:
-    import pyvips
-    pyvips_available = True
-except ModuleNotFoundError:
-    logger.error('pyvips module not found: FileSystemCollections scanning for new or modified images will not work.')
-
-
 cru_available = False
 try:
     import sys
-    sys.path.append(str(Path(__file__).absolute().parent.parent / 'cru/build/release'))
+    sys.path.append(str(Path(__file__).absolute().parent.parent.parent / 'cru/build/release'))
     import cru
     cru_available = True
 except ModuleNotFoundError:
-    logger.warning('Cru module not found: raw image format support will be slow or broken.')
+    logger.error('cru module not found: FileSystemCollections scanning for new or modified images will not work.')
 
 
 def _scan_directory_recursive(path: PurePosixPath) -> Generator[os.DirEntry, None, None]:
@@ -42,47 +34,6 @@ def _scan_directory_recursive(path: PurePosixPath) -> Generator[os.DirEntry, Non
                 yield entry
 
 
-def _date_with_local_timezone(date_time: datetime | None) -> datetime | None:
-    if date_time and not date_time.tzinfo:
-        date_time = date_time.astimezone()
-
-    return date_time
-
-
-def _try_get_image_field(image: "pyvips.Image", name: str):
-        try:
-            return image.get(name)
-        except pyvips.Error:
-            return None
-
-
-def _get_image_capture_date(image: "pyvips.Image") -> datetime | None:
-
-    date_time_str = _try_get_image_field(image, 'exif-ifd2-DateTimeOriginal')
-    if not date_time_str:
-        return None
-
-    sub_seconds_str = _try_get_image_field(image, 'exif-ifd2-SubSecTimeOriginal')
-    offset_str = _try_get_image_field(image, 'exif-ifd2-OffsetTimeOriginal')
-
-    date_time = None
-    try:
-        date_time_str = date_time_str[:19]
-        date_time_format = '%Y:%m:%d %H:%M:%S'
-        if offset_str:
-            date_time_str += offset_str[:6]
-            date_time_format += '%z'
-        date_time = datetime.strptime(date_time_str, date_time_format)
-        if sub_seconds_str:
-            sub_seconds_str = sub_seconds_str.split()[0]
-            sub_seconds = int(sub_seconds_str) * pow(10, -len(sub_seconds_str))
-            date_time += timedelta(seconds=sub_seconds)
-    except ValueError:
-        logger.exception(f'Invalid date: {date_time_str}')
-
-    return _date_with_local_timezone(date_time)
-
-
 @dataclass
 class ImageInfo:
     width: int
@@ -91,30 +42,24 @@ class ImageInfo:
 
 
 def _try_load_image_info(path: PurePosixPath) -> ImageInfo | None:
-    if not pyvips_available:
+    if not cru_available:
         return None
-
-    if cru_available:
-        try:
-            if data := cru.load_image_info(str(path)):
-                return ImageInfo(data.width, data.height, _date_with_local_timezone(data.capture_date))
-        except Exception:
-            logger.error('Cru error', exc_info=True)
 
     try:
-        image: pyvips.Image = pyvips.Image.new_from_file(str(path), access='sequential-unbuffered')
+        if data := cru.load_image_info(str(path)):
+            capture_date = None
+            if data.times.original:
+                original_time = data.times.original
+                capture_date = datetime.fromtimestamp(original_time.seconds, timezone.utc)
+                capture_date = capture_date.astimezone(timezone(timedelta(seconds=original_time.offset)))
+            elif data.times.gps:
+                capture_date = datetime.fromtimestamp(data.times.gps.seconds, timezone.utc)
 
-        width = image.width
-        height = image.height
-        orientation = _try_get_image_field(image, 'orientation')
-        # From vips_image_get_orientation_swap()
-        if orientation and orientation >= 5 and orientation <= 8:
-            width, height = height, width
-
-        return ImageInfo(width, height, _get_image_capture_date(image))
-    except pyvips.Error as exception:
+            return ImageInfo(data.width, data.height, capture_date)
+    except Exception as exception:
         logger.debug(f'File "{path}" is probably not an image: {exception.message}')
-        return None
+
+    return None
 
 
 def _get_real_path(pure_path: PurePath | str) -> Path:
@@ -225,14 +170,15 @@ class FileSystemCollection(Collection):
     def _get_process_class():
         return FileSystemCollectionProcess
 
-    def get_photo_url(self, db: sqlite3.Connection, id: int):
+    def get_photo_info(self, db: sqlite3.Connection, id: int):
         row = db.execute('SELECT path FROM fs_collections_data WHERE photo_id = ?', (id,)).fetchone()
         if not row:
             logger.error(f'No photo in collection {self.identifier} with id {id}')
             return None
 
-        path: Path = self._root_path / row[0]
-        if not path.exists():
+        local_path = Path(row[0])
+        absolute_path = self._root_path / local_path
+        if not absolute_path.exists():
             return None
 
-        return path.as_uri()
+        return PhotoInfo(absolute_path.as_uri(), local_path, self.display_name)

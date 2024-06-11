@@ -11,12 +11,13 @@ from urllib.parse import urlparse, unquote
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.job import Job
 from apscheduler.jobstores.base import JobLookupError
 from croniter import croniter
 import requests
 
 import expo_db
-from collection import get_new_photo_url, parse_filter, Filter, Order
+from collection import get_new_photo, parse_filter, Filter, Order, PhotoInfo
 
 
 refresh_job_logger = logging.getLogger('refresh_job')
@@ -41,6 +42,8 @@ class RefreshJob:
                  order: str | Order, affiche_options: dict[str, Any]):
         if not expo_db.validate_identifier(identifier):
             raise ValueError('Invalid identifier')
+        if len(schedule) > 0 and not croniter.is_valid(schedule):
+            raise ValueError('Invalid schedule')
 
         self._id = id
         self._identifier = identifier
@@ -52,7 +55,7 @@ class RefreshJob:
         self._filter = filter if isinstance(filter, Filter) else parse_filter(filter)
         self._order = order if isinstance(order, Order) else Order[order]
         self._affiche_options = affiche_options
-        self._job = None
+        self._job: Job | None = None
 
 
     @property
@@ -134,9 +137,9 @@ class RefreshJob:
     def _refresh(self, db_path: Path):
         try:
             refresh_job_logger.info(f'Running refresh job "{self._identifier}"')
-            if photo_url := get_new_photo_url(db_path, self._filter, self._order):
-                refresh_job_logger.info(f'Posting: "{photo_url}" to {self._hostname}')
-                self._post_photo(photo_url)
+            if photo_info := get_new_photo(db_path, self._filter, self._order):
+                refresh_job_logger.info(f'Posting: "{photo_info.url}" to {self._hostname}')
+                self._post_photo(photo_info)
             else:
                 refresh_job_logger.info('No image available for refresh')
         except Exception:
@@ -148,7 +151,7 @@ class RefreshJob:
             raise ValueError('Can\'t refresh a disabled job')
 
         trigger_date = datetime.now().astimezone() + timedelta(seconds=delay)
-        if self._job:
+        if self._job and refresh_scheduler.get_job(self._job.id):
             self._job.modify(next_run_time=trigger_date)
         else:
             refresh_scheduler.add_job(lambda: self._refresh(db_path), trigger=DateTrigger(trigger_date))
@@ -167,17 +170,22 @@ class RefreshJob:
             pass
 
 
-    def _post_photo(self, photo_url: str):
+    def _post_photo(self, photo_info: PhotoInfo):
         host_url = f'http://{self._hostname}'
 
         # If we have a local file for a non-local address, then
         # we need to stream the content instead of sending the URL.
         if not self._is_local_address:
-            if photo_path := RefreshJob._try_get_local_path(photo_url):
+            if photo_path := RefreshJob._try_get_local_path(photo_info.url):
                 requests.post(host_url, files={'file': open(photo_path, 'rb')}).raise_for_status()
                 return
 
-        requests.post(host_url, data={'url': photo_url}).raise_for_status()
+        data = {
+            'url': photo_info.url,
+            'info.path': photo_info.path_info,
+            'info.collection': photo_info.collection_info
+        }
+        requests.post(host_url, data=data).raise_for_status()
 
 
     @staticmethod

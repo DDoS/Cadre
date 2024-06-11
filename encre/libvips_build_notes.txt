@@ -14,20 +14,15 @@ Feel free to trim down to what actually want.
 Build latest ImageMagick
     run: git clone --depth 1 --branch <latest version tag>  https://github.com/ImageMagick/ImageMagick.git
     run: ./configure --with-modules --prefix="`pwd`/install"
-    run: make
-    run: make install
-    run: sudo ldconfig "`pwd`/ImageMagick6/install/lib"
+    run: make && make install
+    run: sudo ldconfig "`pwd`/ImageMagick/install/lib"
 
 Build latest libvips
     install: meson
     run: git clone --depth 1 --branch <latest version tag> https://github.com/libvips/libvips.git
     append to PKG_CONFIG_PATH: "<ImageMagick path>/install/lib/pkgconfig"
     run: meson setup build --buildtype=release --prefix="`pwd`/install" --libdir lib
-    run: meson compile
-    run: meson install
+    run: cd build && meson compile && meson install
 
-Before configuring Encre:
+Before configuring Encre or Cru:
     append to PKG_CONFIG_PATH: "<libvips path>/install/lib/pkgconfig"
-
-Before running Expo:
-    append to LD_LIBRARY_PATH: "<libvips path>/install/lib"

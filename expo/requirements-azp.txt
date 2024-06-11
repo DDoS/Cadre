@@ -1,1 +1,2 @@
 amazon_photos @ git+https://github.com/DDoS/amazon_photos.git@cadre
+numpy

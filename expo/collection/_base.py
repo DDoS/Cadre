@@ -38,6 +38,13 @@ class _UpdateMessage:
     delay: float = 0
 
 
+@dataclass
+class PhotoInfo:
+    url: str
+    path_info: str | None
+    collection_info: str
+
+
 class CollectionProcess(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, id: int, identifier: str):
@@ -55,6 +62,8 @@ class Collection(metaclass=ABCMeta):
                  schedule: str, enabled: bool, settings: dict[str, Any]):
         if not expo_db.validate_identifier(identifier):
             raise ValueError('Invalid identifier')
+        if len(schedule) > 0 and not croniter.is_valid(schedule):
+            raise ValueError('Invalid schedule')
 
         if errors := self.__class__.get_settings_schema().validate(settings):
             raise ValidationError(errors, data=settings)
@@ -128,7 +137,7 @@ class Collection(metaclass=ABCMeta):
             self._queue.put(_UpdateMessage(delay))
 
     @abstractmethod
-    def get_photo_url(self, db: sqlite3.Connection, id: int) -> str | None:
+    def get_photo_info(self, db: sqlite3.Connection, id: int) -> PhotoInfo | None:
         raise NotImplementedError()
 
     def stop(self):
@@ -325,7 +334,7 @@ def remove_collection(db_path: Path, collection: Collection):
         db.close()
 
 
-def get_new_photo_url(db_path: Path, filter: Filter, order: Order) -> str | None:
+def get_new_photo(db_path: Path, filter: Filter, order: Order) -> PhotoInfo | None:
     try:
         db = expo_db.open(db_path)
 
@@ -369,14 +378,14 @@ def get_new_photo_url(db_path: Path, filter: Filter, order: Order) -> str | None
 
         photo_id, collection_id = row
 
-        photo_url: str | None = None
+        photo_info: PhotoInfo | None = None
         for collection in _collections_by_identifier.values():
             if collection._id == collection_id:
-                if photo_url := collection.get_photo_url(db, photo_id):
-                    collection_logger.debug(f'selected photo "{photo_url}" from "{collection.identifier}"')
+                if photo_info := collection.get_photo_info(db, photo_id):
+                    collection_logger.debug(f'selected photo "{photo_info.url}" from "{collection.identifier}"')
                     break
 
-        return photo_url
+        return photo_info
     finally:
         db.close()
 

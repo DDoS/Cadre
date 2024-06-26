@@ -10,7 +10,7 @@ from typing import Any, Callable
 from marshmallow import INCLUDE, Schema, fields
 import pandas as pd
 
-from ._base import Collection, CollectionProcess
+from ._base import PhotoInfo, Collection, CollectionProcess
 
 
 logger = logging.getLogger('')
@@ -19,6 +19,8 @@ logger = logging.getLogger('')
 amazon_photos_available = False
 try:
     from amazon_photos import AmazonPhotos
+    from httpx import AsyncClient
+    import asyncio
     amazon_photos_available = True
 except ModuleNotFoundError:
     logger.error('amazon_photos module not found: AmazonPhotosCollections update and refresh will not work.')
@@ -177,7 +179,7 @@ class AmazonPhotosCollection(Collection):
     def _get_process_class():
         return AmazonPhotosCollectionProcess
 
-    def get_photo_url(self, db: sqlite3.Connection, id: int):
+    def get_photo_info(self, db: sqlite3.Connection, id: int):
         if not amazon_photos_available:
             logger.warning('amazon_photos module is not installed.')
             return None
@@ -193,11 +195,54 @@ class AmazonPhotosCollection(Collection):
         node_id: str = row[0]
         amazon_photos = AmazonPhotos(self._cookies, self._user_agent, logger=logger)
         amazon_photos.download([node_id], out=out_directory)
-        for photo_path in out_directory.glob(f'{node_id}_*'):
-            return photo_path.as_uri()
+        azp_path = AmazonPhotosCollection._get_node_path(amazon_photos, node_id)
+        for photo_download_path in out_directory.glob(f'{node_id}_*'):
+            return PhotoInfo(photo_download_path.as_uri(), azp_path, self.display_name)
 
         logger.error(f'Node {node_id} download did not output a prefixed file in "{out_directory}"')
         return None
+
+    @staticmethod
+    def _get_node_path(amazon_photos: AmazonPhotos, node_id: str) -> str | None:
+        client = AsyncClient(
+            http2=False,
+            limits=amazon_photos.limits,
+            headers=amazon_photos.client.headers,
+            cookies=amazon_photos.client.cookies,
+            verify=False,
+        )
+
+        async def get_node(node_id: str) -> dict[str, Any] | None:
+            response = await client.get(f'{amazon_photos.drive_url}/nodes/{node_id}',
+                                        params=amazon_photos.base_params)
+            return response.json() if response else None
+
+        async def get_node_path_async() -> str:
+            path_segments: list[str] = []
+            visited_nodes: set[str] = set()
+            next_node_id = node_id
+            while True:
+                if next_node_id in visited_nodes:
+                    break
+
+                if node := await get_node(next_node_id):
+                    visited_nodes.add(next_node_id)
+                    if segment := node.get('name'):
+                        path_segments.append(segment)
+                        if parentTypes := node.get('parentMap'):
+                            if parents := parentTypes.get('FOLDER'):
+                                next_node_id = parents[0]
+                                continue
+                break
+
+            path_segments.reverse()
+            return '/'.join(path_segments)
+
+        try:
+            return asyncio.run(get_node_path_async())
+        except Exception:
+            logger.exception('Failed to get node path')
+            return None
 
     @staticmethod
     def _cleanup_out_directory(path: Path):

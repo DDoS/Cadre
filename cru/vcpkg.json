@@ -10,6 +10,12 @@
             "name": "jasper",
             "default-features": false
         },
+        "date",
         "pybind11"
-    ]
+    ],
+    "vcpkg-configuration": {
+        "overlay-ports": [
+            "../vcpkg-overlays/python3"
+        ]
+    }
 }

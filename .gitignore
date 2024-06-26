@@ -9,3 +9,5 @@ temp/
 *.log.[0-9]
 *.out
 *.db
+
+.DS_Store

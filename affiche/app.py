@@ -6,9 +6,11 @@ import random
 import threading
 from enum import Enum
 from pathlib import Path, PurePosixPath
+from datetime import date, datetime, timedelta, timezone
 from logging.config import dictConfig
 from urllib.parse import unquote, urlsplit
 from urllib.request import urlopen, urlretrieve
+from typing import Any
 
 from flask import Flask, Response, request, redirect, send_file, stream_with_context, url_for
 from werkzeug.utils import secure_filename
@@ -31,6 +33,16 @@ def get_external_hostname():
 
 
 affiche_logger = logging.getLogger('affiche')
+
+
+cru_available = False
+try:
+    import sys
+    sys.path.append(str(Path(__file__).absolute().parent.parent / 'cru/build/release'))
+    import cru
+    cru_available = True
+except ModuleNotFoundError:
+    affiche_logger.error('cru module not found: image metadata will not be available.')
 
 
 SERVER_PATH = Path(__file__).parent
@@ -109,7 +121,8 @@ DisplayWriterStatus = Enum('DisplayWriterStatus', ['READY', 'FAILED', 'BUSY'])
 DisplayWriterSubStatus = Enum('DisplayWriterSubStatus', ['NONE', 'LAUNCHING', 'CONVERTING', 'DISPLAYING'])
 display_writer_last_status = DisplayWriterStatus.READY
 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
-display_writer_last_preview: Path = None
+display_writer_image_info: dict[str, Any] | None = None
+display_writer_last_preview: Path | None = None
 
 def update_display_writer_preview_locked(preview_path: Path):
     global display_writer_last_preview
@@ -131,7 +144,59 @@ def update_display_writer_preview_locked(preview_path: Path):
         if preview_path is not None:
             preview_path.unlink(missing_ok=True)
 
-def run_display_writer(command: list[Path | str], image_path: Path, preview_path: Path, options: dict[str]) -> bool:
+def try_load_image_info(path: Path) -> dict[str, Any] | None:
+    if not cru_available:
+        return None
+
+    try:
+        data = cru.load_image_info(str(path))
+        if not data:
+            return None
+
+        fields = {}
+
+        if data.times.original:
+            capture_date = datetime.fromtimestamp(data.times.original.seconds, timezone.utc)
+            capture_date = capture_date.astimezone(timezone(timedelta(seconds=data.times.original.offset)))
+            fields['captureDateTime'] = capture_date.isoformat()
+        if data.times.gps:
+            if data.times.gps.date_only:
+                fields['gpsDate'] = date.fromtimestamp(data.times.gps.seconds).isoformat()
+            else:
+                fields['gpsDateTime'] = datetime.fromtimestamp(data.times.gps.seconds, timezone.utc).isoformat()
+
+        if data.make_and_model.camera:
+            fields['cameraMakeAndModel'] = data.make_and_model.camera
+        if data.make_and_model.lens:
+            fields['lensMakeAndModel'] = data.make_and_model.lens
+
+        if data.camera_settings.aperture:
+            fields['apertureSetting'] = data.camera_settings.aperture
+        if data.camera_settings.exposure:
+            fields['exposureSetting'] = data.camera_settings.exposure
+        if data.camera_settings.iso:
+            fields['isoSetting'] = data.camera_settings.iso
+        if data.camera_settings.focal_length:
+            fields['focalLengthSetting'] = data.camera_settings.focal_length
+
+        if data.gps.longitude:
+            fields['gpsLongitude'] = data.gps.longitude
+        if data.gps.latitude:
+            fields['gpsLatitude'] = data.gps.latitude
+        if data.gps.altitude:
+            fields['gpsAltitude'] = data.gps.altitude
+        if data.gps.speed:
+            fields['gpsSpeed'] = data.gps.speed
+        if data.gps.direction:
+            fields['gpsDirection'] = data.gps.direction
+        fields['gpsZeroDirection'] = data.gps.zero_direction.name
+
+        return fields
+    except Exception:
+        return None
+
+def run_display_writer(command: list[Path | str], image_path: Path, preview_path: Path,
+                       options: dict[str], info: dict[str]) -> bool:
     global display_writer_last_status
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
@@ -140,6 +205,7 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
     def run():
         global display_writer_last_status
         global display_writer_last_sub_status
+        global display_writer_image_info
 
         try:
             options_string = json.dumps(options)
@@ -151,6 +217,10 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
                 display_writer_last_sub_status = DisplayWriterSubStatus.LAUNCHING
                 display_writer_update_lock.notify_all()
 
+            image_info = try_load_image_info(image_path)
+            if image_info is not None:
+                image_info.update(info)
+
             while True:
                 output_line = process.stdout.readline()
                 if output_line.startswith('Status: '):
@@ -159,6 +229,7 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
                         with display_writer_update_lock:
                             display_writer_last_sub_status = DisplayWriterSubStatus[status_string]
                             if display_writer_last_sub_status == DisplayWriterSubStatus.DISPLAYING:
+                                display_writer_image_info = image_info
                                 update_display_writer_preview_locked(preview_path)
                             display_writer_update_lock.notify_all()
                     except Exception:
@@ -172,12 +243,14 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
                 display_writer_last_status = DisplayWriterStatus.READY if \
                     exit_code == 0 else DisplayWriterStatus.FAILED
                 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
+                display_writer_image_info = image_info
                 update_display_writer_preview_locked(preview_path)
                 display_writer_update_lock.notify_all()
         except Exception:
             with display_writer_update_lock:
                 display_writer_last_status = DisplayWriterStatus.FAILED
                 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
+                display_writer_image_info = None
                 update_display_writer_preview_locked(preview_path)
                 display_writer_update_lock.notify_all()
             affiche_logger.exception('Failed to refresh display')
@@ -256,15 +329,24 @@ def upload_file():
                        ('brightness', float), ('contrast', float), ('sharpening', float),
                        ('clipped_chroma_recovery', float), ('error_attenuation', float)]:
         try:
-            value = request.form.get(name, type=type)
+            value = request.form.get(f'options.{name}', type=type)
             if value is not None:
                 options[name] = value
         except ValueError:
             pass
 
+    info = {}
+    for name, type in [('path', str), ('collection', str)]:
+        try:
+            value = request.form.get(f'info.{name}', type=type)
+            if value is not None:
+                info[name] = value
+        except ValueError:
+            pass
+
     display_writer_command: list[Path | str] = app.config['DISPLAY_WRITER_COMMAND']
     preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
-    if not run_display_writer(display_writer_command, file_path, preview_path, options):
+    if not run_display_writer(display_writer_command, file_path, preview_path, options, info):
         return redirect(request.url)
 
     return redirect(request.url)
@@ -281,8 +363,9 @@ def status():
                 'subStatus': display_writer_last_sub_status.name
             }
 
-            if display_writer_last_preview:
-                data['preview'] = url_for('preview', file_name=display_writer_last_preview.name)
+            data['preview'] = url_for('preview', file_name=display_writer_last_preview.name) if \
+                              display_writer_last_preview else None
+            data['imageInfo'] = display_writer_image_info if display_writer_image_info else None
 
             return f'data: {json.dumps(data)}\n\n'
 
@@ -311,6 +394,10 @@ def preview(file_name: str):
             app.log_exception(exception)
 
         return '', 204
+
+@app.route('/map_tiles')
+def map():
+    return app.config['MAP_TILES'], 200
 
 @app.route('/expo')
 def expo():

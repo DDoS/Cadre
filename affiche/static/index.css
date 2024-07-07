@@ -43,8 +43,9 @@ body {
     display: flex;
     justify-content: center;
     width: 100%;
-    max-width: max(150vh, 700px);
+    max-width: 85vw;
     margin: 16px 0;
+    gap: 16px;
 }
 
 .affiche-sub-content {
@@ -53,27 +54,33 @@ body {
     border-radius: 8px;
 }
 
-.affiche-content-item {
-    margin: 12px;
+.affiche-content-form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
 }
 
-.affiche-column {
+.affiche-file {
     display: flex;
     flex-direction: column;
     align-items: center;
+    align-self: center;
+    gap: 8px;
 }
 
-.affiche-file-input {
+.affiche-file__label {
+    font-size: 13pt;
+    font-weight: 600;
+}
+
+.affiche-file__input {
     width: 200px;
+    margin-left: 24px;
 }
 
 .affiche-submit {
-    margin-top: 16px;
-}
-
-.affiche-options-collapsible {
-    margin-left: 24px;
-    margin-top: 16px;
+    align-self: center;
 }
 
 .affiche-options-header {
@@ -95,13 +102,14 @@ body {
 }
 
 .affiche-options-header__title {
-    font-size: 11pt;
+    font-size: 10pt;
     font-weight: 600;
+    margin-bottom: 8px;
 }
 
 .affiche-options-foldout {
     display: flex;
-    margin: 12px 12px 0 12px;
+    margin: 0 12px 0 12px;
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.1s ease-in-out;
@@ -111,7 +119,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    row-gap: 4px;
+    gap: 4px
 }
 
 .affiche-option {
@@ -128,14 +136,68 @@ body {
 }
 
 .affiche-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.affiche-preview__image {
     object-fit: contain;
     max-width: min(85vw, 100%);
 }
 
-.affiche-preview-title {
+.affiche-preview__title {
     font-size: 10pt;
     font-weight: 200;
-    margin: 12px 0;
+    margin-top: 8px;
+}
+
+.affiche-info {
+    display: flex;
+    flex-direction: row;
+    align-self: center;
+    justify-content: center;
+}
+
+.affiche-info__fields {
+    display: flex;
+    flex-direction: column;
+}
+
+.affiche-info__field > label {
+    font-size: 11pt;
+    font-weight: 600;
+    padding-right: 6px;
+}
+
+.affiche-info__field {
+    display: flex;
+}
+
+.affiche-info-map {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 400px;
+    max-width: 600px;
+}
+
+.affiche-info-map__leaflet {
+    width: 100%;
+    height: 400px;
+    max-width: 600px;
+}
+
+.affiche-info-map__title {
+    font-size: 10pt;
+    font-weight: 200;
+    margin-top: 8px;
+}
+
+.affiche-info-map__link {
+    font-size: 9pt;
+    font-weight: 200;
 }
 
 .affiche-expo-integration {
@@ -163,4 +225,12 @@ body {
 .affiche-expo-refresh > label {
     font-size: 11pt;
     font-weight: 400;
+}
+
+.affiche-icon--ok::after {
+    content: ' ✅'
+}
+
+.affiche-icon--error::after {
+    content: ' ❌'
 }

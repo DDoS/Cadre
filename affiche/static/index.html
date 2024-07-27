@@ -3,6 +3,7 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
+        <script src="static/third_party/jsoneditor/jsoneditor.js"></script>
         <link rel="stylesheet" href="static/third_party/leaflet/leaflet.css" />
         <script src="static/third_party/leaflet/leaflet.js"></script>
         <script src="static/third_party/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
@@ -27,6 +28,48 @@
             const imageInfoElement = document.getElementById("image-info");
             window.addEventListener("resize", () => updateContentLayout([contentElement, imageInfoElement]));
             updateContentLayout([contentElement, imageInfoElement]);
+
+            const fetchJson = async (endpoint, defaultValue) => {
+                const response = await fetch(new Request(endpoint));
+                return response.ok ? await response.json() : defaultValue;
+            };
+
+            JSONEditor.defaults.options.theme = 'barebones';
+            JSONEditor.defaults.options.show_errors = 'change';
+            JSONEditor.defaults.options.disable_collapse = true;
+            JSONEditor.defaults.options.disable_edit_json = true;
+            JSONEditor.defaults.options.disable_properties = true;
+            JSONEditor.defaults.options.no_additional_properties = true;
+
+            const makeOptionEditor = async (schemaUrl, editorId, options) => {
+                const schema = await fetchJson(schemaUrl, null);
+                if (!schema) {
+                    return null;
+                }
+
+                const editor = new JSONEditor(document.getElementById(editorId), {
+                    schema: schema,
+                    ...options
+                });
+                return new Promise(function (resolve, reject) {
+                    editor.on('ready', () => {
+                        editor.off('ready');
+                        resolve(editor);
+                    });
+                });
+            };
+
+            const optionsDefaultValuePromise = fetchJson("display_writer_options_defaults.json", null);
+            const optionsEditor = await makeOptionEditor(
+                "display_writer_options_schema.json", "options-editor",
+                {
+                    form_name_root: "options",
+                    use_default_values: false
+                }
+            );
+            optionsEditor.setValue(await optionsDefaultValuePromise);
+            // Called twice to workaround a bug: https://github.com/json-editor/json-editor/issues/1343
+            optionsEditor.setValue(await optionsDefaultValuePromise);
 
             const statusText = document.getElementById("status");
             const subStatusText = document.getElementById("sub-status");
@@ -79,9 +122,8 @@
             new ResizeObserver(() => infoMap.invalidateSize()).observe(leafletMapElement);
 
             const setMapTiles = async () => {
-                const response = await fetch(new Request("/map_tiles"));
-                if (response.ok) {
-                    const mapTiles = await response.json();
+                const mapTiles = await fetchJson("/map_tiles", null);
+                if (mapTiles) {
                     L.tileLayer(mapTiles.url, mapTiles.options).addTo(infoMap);
                 }
             };
@@ -287,12 +329,11 @@
 
             const expoRefreshControls = document.getElementById("expo-refresh-controls");
             const setExpoLink = async () => {
-                const response = await fetch(new Request("/expo"));
-                if (!response.ok || response.status === 204) {
+                const expoData = await fetchJson("/expo", null);
+                if (!expoData) {
                     return;
                 }
 
-                const expoData = await response.json();
                 const expoAddress = expoData.address;
 
                 const expoLink = document.getElementById("expo-link");
@@ -304,21 +345,25 @@
                 }
 
                 expoRefreshButton.addEventListener("click", async () => {
-                    let statusClass;
-                    if ((await fetch(new Request(`http://${expoAddress}/refresh`, {
+                    const waitStatusClass = "affiche-icon--wait";
+                    expoRefreshControls.classList.add(waitStatusClass);
+
+                    let statusClass = "affiche-icon--error";
+                    try {
+                        if ((await fetch(new Request(`http://${expoAddress}/refresh`, {
                                 method: "POST",
                                 headers: {"Content-Type": "application/json"},
                                 body: JSON.stringify({"identifier": expoScheduleList.value})
                             }))).ok) {
-                        statusClass = "affiche-icon--ok";
-                    } else {
-                        statusClass = "affiche-icon--error";
+                            statusClass = "affiche-icon--ok";
+                        }
+                    } catch (error) {
+                        console.error(error);
                     }
 
+                    expoRefreshControls.classList.remove(waitStatusClass);
                     expoRefreshControls.classList.add(statusClass);
-                    setTimeout(() => {
-                        expoRefreshControls.classList.remove(statusClass);
-                    }, 5000);
+                    setTimeout(() => expoRefreshControls.classList.remove(statusClass), 5000);
                 });
 
                 const expoIntegration = document.getElementById("expo-integration")
@@ -345,45 +390,7 @@
                             <div class="affiche-options-header__title" id="options-header-title">Options</div>
                         </div>
                         <div class="affiche-options-foldout" id="options-foldout">
-                            <div class="affiche-options affiche-sub-content">
-                                <div class="affiche-option">
-                                    <label for="rotation">Orientation</label>
-                                    <select name="options.rotation" id="rotation">
-                                        <option value="automatic">Automatic</option>
-                                        <option value="landscape">Landscape</option>
-                                        <option value="portrait">Portrait</option>
-                                        <option value="landscape_upside_down">Landscape upside-down</option>
-                                        <option value="portrait_upside_down">Portrait upside-down</option>
-                                    </select>
-                                </div>
-                                <div class="affiche-option">
-                                    <label for="dynamic-range">Dynamic range</label>
-                                    <input type="number" id="dynamic-range" name="options.dynamic_range" step="0.01" placeholder="ex: 0.95" />
-                                </div>
-                                <div class="affiche-option">
-                                    <label for="exposure">Exposure</label>
-                                    <input type="number" id="exposure" name="options.exposure" step="0.01" placeholder="ex: 1.5" />
-                                </div>
-                                <div class="affiche-option">
-                                    <label for="brightness">Brightness</label>
-                                    <input type="number" id="brightness" name="options.brightness" step="0.1" placeholder="ex: 10" />
-                                </div>
-                                <div class="affiche-option">
-                                    <label for="contrast">Contrast</label>
-                                    <input type="number" id="contrast" name="options.contrast" step="0.01" placeholder="ex: 0.6" />
-                                </div>
-                                <div class="affiche-option">
-                                    <label for="sharpening">Sharpening</label>
-                                    <input type="number" id="sharpening" name="options.sharpening" step="0.1" placeholder="ex: 4" />
-                                </div>
-                                <div class="affiche-option">
-                                    <label for="clipped-chroma-recovery">Clipped chroma recovery</label>
-                                    <input type="number" id="clipped-chroma-recovery" name="options.clipped_chroma_recovery" step="0.01" placeholder="ex: 1" />
-                                </div>
-                                <div class="affiche-option">
-                                    <label for="error-attenuation">Dither error attenuation</label>
-                                    <input type="number" id="error-attenuation" name="options.error_attenuation" step="0.01" placeholder="ex: 0.1" />
-                                </div>
+                            <div class="affiche-options affiche-sub-content" id="options-editor">
                             </div>
                         </div>
                     </div>

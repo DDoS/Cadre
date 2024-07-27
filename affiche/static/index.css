@@ -122,17 +122,85 @@ body {
     gap: 4px
 }
 
-.affiche-option {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.affiche-option > label {
+.affiche-options {
     font-size: 11pt;
-    font-weight: 400;
-    padding-right: 8px;
+
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+
+    .je-object__container {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    > .je-object__container {
+        > .je-object__title {
+            display: none;
+        }
+
+        > .je-object__controls {
+            display: none;
+        }
+
+        > .je-indented-panel {
+            padding: 0;
+            margin: 0;
+        }
+    }
+
+    .je-object__controls {
+        display: flex;
+        flex-direction: row;
+        margin: 0;
+        gap: 4px;
+    }
+
+    .je-indented-panel {
+        border: none;
+
+        > div > div {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 4px;
+        }
+
+        .je-switcher {
+            background-color: revert;
+            font-style: revert;
+            font-weight: revert;
+        }
+    }
+
+    .form-control {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+
+        label {
+            font-weight: 400;
+            display: flex;
+            flex: 1 1;
+            margin-right: 8px;
+        }
+
+        > input, select {
+            display: flex;
+            flex: 0 1;
+            max-width: 50%;
+        }
+
+        .errmsg {
+            flex-basis: 100%;
+            color: lab(50% 45 15);
+            font-size: 9pt;
+            padding-left: 6px;
+        }
+    }
 }
 
 .affiche-preview {
@@ -225,6 +293,10 @@ body {
 .affiche-expo-refresh > label {
     font-size: 11pt;
     font-weight: 400;
+}
+
+.affiche-icon--wait::after {
+    content: ' ⏳'
 }
 
 .affiche-icon--ok::after {

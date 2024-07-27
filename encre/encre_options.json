@@ -1,0 +1,49 @@
+{
+    "rotation": {
+        "display_name": "Rotation",
+        "type": "string",
+        "enum": {
+            "automatic": "Automatic",
+            "landscape": "Landscape",
+            "portrait": "Portrait",
+            "landscape_upside_down": "Landscape upside-down",
+            "portrait_upside_down": "Portrait upside-down"
+        },
+        "default": "automatic"
+    },
+    "dynamic_range": {
+        "display_name": "Dynamic range",
+        "type": "number",
+        "placeholder": "ex: 0.95"
+    },
+    "exposure": {
+        "display_name": "Exposure",
+        "type": "number",
+        "placeholder": "ex: 1.5"
+    },
+    "brightness": {
+        "display_name": "Brightness",
+        "type": "number",
+        "placeholder": "ex: 10"
+    },
+    "contrast": {
+        "display_name": "Contrast",
+        "type": "number",
+        "placeholder": "ex: 0.6"
+    },
+    "sharpening": {
+        "display_name": "Sharpening",
+        "type": "number",
+        "placeholder": "ex: 4"
+    },
+    "clipped_chroma_recovery": {
+        "display_name": "Clipped chroma recovery",
+        "type": "number",
+        "placeholder": "ex: 1"
+    },
+    "error_attenuation": {
+        "display_name": "Dither error attenuation",
+        "type": "number",
+        "placeholder": "ex: 0.1"
+    }
+}

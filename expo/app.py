@@ -94,6 +94,7 @@ class DefaultJSONProvider_EnumSupport(DefaultJSONProvider):
 Flask.json_provider_class = DefaultJSONProvider_EnumSupport
 app = Flask(__name__)
 app.json.sort_keys = False
+app.json.include_nulls = True
 CORS(app)
 setup_app_config(app)
 start_background_jobs(app)

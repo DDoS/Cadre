@@ -81,6 +81,42 @@ To create a custom palette, call `py_encre.make_palette_xyz` or `py_encre.make_p
 If you're lucky, your display data sheet will have the CIE Lab values for each colour,
 otherwise you can eyeball them... An example is available [here](encre/misc/rgb_palette_example.py).
 
+### Options
+
+Options are available to tweak the image processing. Operations
+are performed in the [Oklab](https://bottosson.github.io/posts/oklab/)
+perceptual colour space.
+
+- Rotation: apply a rotation (after the EXIF orientation, if applicable)
+    - Automatic: landscape is unchanged, portrait is rotated to landscape.
+    - Landscape: unchanged
+    - Portrait: 90° counter-clockwise
+    - Landscape upside-down: 180°
+    - Portrait upside-down: 90° clockwise
+- Dynamic range: percentage of the original image dynamic range to be
+rescaled into the output palette. Using `0` will keep the original dynamic
+range, which will lead to a lot of clipping if the palette has a small
+dynamic range. Using `1` will force the entirety of the dynamic range
+into the output, which means no clipping, but lowest contrast possible.
+- Exposure: Lightness scale factor (multiply with `L` component). If not specified,
+then some basic automatic exposure adjustment is made to bring the image
+dynamic range into the output palette.
+- Brightness: Lightness bias factor (add to `L` component). If not specified,
+then some basic automatic brightness adjustment is made to bring the image
+dynamic range into the output palette.
+- Contrast: Slope of the sigmoid function used to compress the image dynamic
+range into the output palette. Larger values increase contrat in the mid range,
+at the cost of compressing the shadows and highlights.
+- Sharpening: edge sharpening, useful to recover some details after the resize.
+- Clipped chroma recovery: α value described [here](https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent),
+used to recover some color from the clipped highlights caused by gamut mapping.
+- Dither error attenuation: exponential attenuation factor applied to the dither
+error before diffusion. Helps reduce smearing caused by small errors being
+diffused over large areas, but comes at the cost of colour accuracy.
+Values over `1` create a more artistic effect.
+
+Options are also defined in [encre_options.json](encre/encre_options.json) for use by Affiche.
+
 ## Affiche
 
 *Local web interface*
@@ -102,10 +138,14 @@ If you want image metadata support (EXIF information and geolocation), you need 
 
 Copy the [default config](affiche/default_config.json) and name it `config.json`.
 In this file you can overwrite the following fields:
-- `TEMP_PATH`: where to write the temporary files, absolute or relative to the server executable
-- `DISPLAY_WRITER_COMMAND`: the command line to run for writing a new image to the display as a list of arguments.
+- `TEMP_PATH`: Where to write the temporary files, absolute or relative to the server executable
+- `DISPLAY_WRITER_COMMAND`: The command line to run for writing a new image to the display as a list of arguments.
 As well as the image path, it must accept the `--options <json>` and `--preview <path>` arguments to pass in the
 options and the preview image output path.
+- `DISPLAY_WRITER_OPTIONS_SCHEMA_PATH`: Path to the options schema for the display writer.
+See [encre_options.json](encre/encre_options.json) for an example.
+- `DISPLAY_WRITER_OPTIONS`: Dictionary of option name and default value override.
+For example: `{"dynamic_range": 0.8}`.
 - `MAP_TILES`: URL and options for [Leaflet `L.tileLayer()` constructor](https://leafletjs.com/reference.html#tilelayer-l-tilelayer).
 Lets you customize the map shown by Affiche. If you want an English map, I recommend the
 [Thunderforest Atlas tiles](https://www.thunderforest.com/maps/atlas/) (free account required to obtain an API key).
@@ -152,7 +192,7 @@ Start the server using `start.sh`. Use `stop.sh` if you need to stop the server 
 The server should be available at the host's LAN address on port `21110`.
 You can run Expo on the same host as Affiche or a different one.
 
-[<img src="images/expo_screenshot.png" width="400"/>](images/affiche_screenshot.jpeg)
+[<img src="images/expo_screenshot.png" width="400"/>](images/expo_screenshot.png)
 
 ### Configuration
 
@@ -161,9 +201,6 @@ In this file you can overwrite the following fields:
 - `DB_PATH`: where to write the Expo persistent data, absolute or relative to the server executable
 
 ### Collections
-
-You can use this by running Expo on your photo NAS, or on a Raspberry Pi with an SMB share where
-you can copy your favorite photos.
 
 List all collections by `GET`ing from `/collections`.
 Create a collection by `PUT`ting to `/collections` a JSON object like so:
@@ -191,7 +228,12 @@ except all fields are now optional. You can also query using `GET`, and delete 
 
 #### FileSystemCollection
 
-Requires [Cru](#cru) to process images. Scan the `root_path` for known image formats. Does not support the `favorite` filter.
+Use this to display photos from a local collection such as a NAS. You can also create an SMB share on a Raspberry Pi
+where you upload your favourite photos. The photos must be visible on the filesystem where Expo is running.
+
+Requires [Cru](#cru) to process images. Scan the `root_path` for known image formats.
+
+Does not support the `favorite` filter.
 
 Settings:
 ```jsonc
@@ -216,11 +258,13 @@ Settings:
         // This list just an example, since the cookie names are region specific (amazon.ca shown).
         // See: https://github.com/trevorhobenshield/amazon_photos?tab=readme-ov-file#setup
         "at-acbca": "***",
-        "session-id": "***",
         "ubid-acbca": "***",
         "sess-at-acbca": "***",
         "sst-acbca": "***",
-        "x-acbca": "***"
+        "x-acbca": "***",
+        "lc-acbca": "***",
+        "session-id": "***",
+        "session-id-time": "***"
     }
 }
 ```
@@ -255,7 +299,9 @@ The JSON format is:
     "filter": "<filter expression>",
     "order": "<order enum name>",
     "affiche_options": {
-        // Coming soon!
+        // Example for Encre
+        "contrast": 0.5,
+        "sharpening": 2
     }
 }
 ```
@@ -266,7 +312,7 @@ The JSON format is:
 - `enabled` is optional and defaults to `true`
 - `filter` is optional and defaults to `"true"`
 - `order` is optional and defaults to `SHUFFLE`, see below
-- `affiche_options` coming soon!
+- `affiche_options` is optional, override the default options for the target Affiche instance
 
 #### Filter expressions
 

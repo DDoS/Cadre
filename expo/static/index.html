@@ -5,16 +5,16 @@
         <link rel="stylesheet" href="static/index.css">
         <script src="static/third_party/jsoneditor.js"></script>
         <script type="module">
-            const fetchJson = async (endpoint, defaultValue) =>
-            {
+            const fetchJson = async (endpoint, defaultValue) => {
                 const response = await fetch(new Request(endpoint));
                 return response.ok ? await response.json() : defaultValue;
             };
+
             const schedules = await fetchJson("/schedules", []);
             const collections = await fetchJson("/collections", []);
 
-            const scheduleDefaultValue = await fetchJson("default/schedule.json", null);
-            const collectionDefaultValue = await fetchJson("default/collection.json", null);
+            const scheduleDefaultValue = await fetchJson("/default/schedule.json", null);
+            const collectionDefaultValue = await fetchJson("/default/collection.json", null);
 
             JSONEditor.defaults.options.theme = 'barebones';
             JSONEditor.defaults.options.show_errors = 'change';
@@ -24,12 +24,11 @@
             JSONEditor.defaults.options.no_additional_properties = true;
 
             const makePropertyEditor = async (schemaUrl, editorId, options) => {
-                const response = await fetch(new Request(schemaUrl));
-                if (!response.ok) {
+                const schema = await fetchJson(new Request(schemaUrl));
+                if (!schema) {
                     return null;
                 }
 
-                const schema = await response.json();
                 const editor = new JSONEditor(document.getElementById(editorId), {
                     schema: schema,
                     ...options
@@ -40,6 +39,55 @@
                         resolve(editor);
                     });
                 });
+            };
+
+            let afficheOptionsEditorPromise = null;
+            let originalAfficheHostname = null;
+            let originalAfficheOptionsValue = null;
+            const hostnamePath = "root.hostname";
+            const updateScheduleSettingsEditor = async () => {
+                const hostname = scheduleEditor.getEditor(hostnamePath).getValue();
+                const hostUrl = new URL(`http://${hostname}`);
+                if (hostUrl.hostname === "localhost") {
+                    hostUrl.hostname = window.location.hostname;
+                }
+                const hostAddress = `//${hostUrl.host}`;
+
+                if (afficheOptionsEditorPromise !== null && afficheOptionsEditorPromise.hostname !== hostname) {
+                    const oldAfficheOptionsEditorPromise = afficheOptionsEditorPromise;
+                    afficheOptionsEditorPromise = null;
+                    const afficheOptionsEditor = await oldAfficheOptionsEditorPromise;
+                    if (afficheOptionsEditor) {
+                        afficheOptionsEditor.destroy();
+                    }
+                }
+
+                if (afficheOptionsEditorPromise === null) {
+                    afficheOptionsEditorPromise = makePropertyEditor(`${hostAddress}/display_writer_options_schema.json`,
+                        "affiche-options-editor", {use_default_values: false, show_opt_in: true}).catch(_ => {
+                            console.log(`Could not get options schema from Affiche host ${hostname}`);
+                            return null;
+                    });
+                    afficheOptionsEditorPromise.hostname = hostname;
+                }
+
+                const afficheOptionsEditor = await afficheOptionsEditorPromise;
+                if (afficheOptionsEditor) {
+                    if (originalAfficheHostname === hostname && originalAfficheOptionsValue !== null) {
+                        afficheOptionsEditor.setValue(originalAfficheOptionsValue);
+                    } else {
+                        const defaultOptions = await fetchJson(`${hostAddress}/display_writer_options_defaults.json`, null);
+                        // Remove options with null values so they are not opted-in with an empty value
+                        Object.keys(defaultOptions).forEach(key => {
+                            if (defaultOptions[key] === null) {
+                                delete defaultOptions[key];
+                            }
+                        });
+                        // Called twice to workaround a bug: https://github.com/json-editor/json-editor/issues/1343
+                        afficheOptionsEditor.setValue(defaultOptions);
+                        afficheOptionsEditor.setValue(defaultOptions);
+                    }
+                }
             };
 
             let settingsEditorPromise = null;
@@ -70,15 +118,21 @@
             };
 
             const scheduleEditor = await makePropertyEditor("schema/schedule.json", "schedule-editor");
+            scheduleEditor.watch(hostnamePath, updateScheduleSettingsEditor);
             const collectionEditor = await makePropertyEditor("schema/collection.json", "collection-editor");
             collectionEditor.watch(classNamePath, updateCollectionSettingsEditor);
 
             const findItemByIdentifier = (list, identifier) => list.find(item => item.identifier === identifier);
             const findItemIndexByIdentifier = (list, identifier) =>  list.findIndex(item => item.identifier === identifier);
 
-            const setScheduleEditorValue = schedule => {
+            const setScheduleEditorValue = async schedule => {
                 if (schedule !== undefined) {
+                    schedule = {...schedule};
+                    originalAfficheHostname = schedule.hostname;
+                    originalAfficheOptionsValue = schedule.affiche_options;
+                    schedule.affiche_options = undefined;
                     scheduleEditor.setValue(schedule);
+                    await updateScheduleSettingsEditor();
                 }
             };
             const setCollectionEditorValue = async collection => {
@@ -88,7 +142,7 @@
                     originalSettingsValue = collection.settings;
                     collection.settings = undefined;
                     collectionEditor.setValue(collection);
-                    await updateCollectionSettingsEditor()
+                    await updateCollectionSettingsEditor();
                 }
             };
 
@@ -115,28 +169,49 @@
 
                 list.dispatchEvent(new Event('change'));
             };
-            await fillListBox(scheduleList, schedules, async () => setScheduleEditorValue(scheduleDefaultValue));
+            await fillListBox(scheduleList, schedules, async () => await setScheduleEditorValue(scheduleDefaultValue));
             await fillListBox(collectionList, collections, async () => await setCollectionEditorValue(collectionDefaultValue));
 
-            const scheduleAddButton = document.getElementById("schedule-add-button")
-            const scheduleRemoveButton = document.getElementById("schedule-remove-button")
+            const withStatusIcon = async (asyncFunc, statusElement) => {
+                const waitStatusClass = "expo-icon--wait";
+                statusElement.classList.add(waitStatusClass);
+
+                let statusClass = "expo-icon--error";
+                try {
+                    if (await asyncFunc()) {
+                        statusClass = "expo-icon--ok";
+                    }
+                } catch (error) {
+                    console.error(error);
+                }
+
+                statusElement.classList.remove(waitStatusClass);
+                statusElement.classList.add(statusClass);
+                setTimeout(() => statusElement.classList.remove(statusClass), 5000);
+            };
+
+            const scheduleAddButton = document.getElementById("schedule-add-button");
+            const scheduleRemoveButton = document.getElementById("schedule-remove-button");
+            const scheduleAddRemoveGroup = document.getElementById("schedule-add-remove-group");
+            const scheduleSaveButtonGroup = document.getElementById("schedule-save-button-group");
             const scheduleSaveButton = document.getElementById("schedule-save-button");
-            scheduleAddButton.addEventListener("click", () => {
-                setScheduleEditorValue(scheduleDefaultValue);
+            scheduleAddButton.addEventListener("click", () => withStatusIcon(async () => {
+                await setScheduleEditorValue(scheduleDefaultValue);
                 scheduleList.selectedIndex = -1;
                 scheduleList.dispatchEvent(new Event('change'));
-            });
-            scheduleRemoveButton.addEventListener("click", async () => {
+                return true;
+            }, scheduleAddRemoveGroup));
+            scheduleRemoveButton.addEventListener("click", () => withStatusIcon(async () => {
                 const index = findItemIndexByIdentifier(schedules, scheduleList.value);
                 if (index < 0) {
-                    return;
+                    return false;
                 }
 
                 const schedule = schedules[index];
                 const response = await fetch(new Request(`/schedules?identifier=${schedule.identifier}`, {method: "DELETE"}));
                 if (!response.ok) {
                     alert(`Error: ${await response.text()}`);
-                    return;
+                    return false;
                 }
 
                 schedules.splice(index, 1);
@@ -144,22 +219,34 @@
                 if (scheduleList.length > 0) {
                     scheduleList.selectedIndex = Math.max(0, index - 1);
                 } else {
-                    setScheduleEditorValue(scheduleDefaultValue);
+                    await setScheduleEditorValue(scheduleDefaultValue);
                     scheduleList.selectedIndex = -1;
                 }
 
                 scheduleList.dispatchEvent(new Event('change'));
-            });
-            scheduleSaveButton.addEventListener("click", async () => {
-                const errors = scheduleEditor.validate();
+                return true;
+            }, scheduleAddRemoveGroup));
+            scheduleSaveButton.addEventListener("click", () => withStatusIcon(async () => {
+                const oldIdentifier = scheduleList.value;
+
+                if (afficheOptionsEditorPromise === null) {
+                    return false;
+                }
+
+                let errors = scheduleEditor.validate()
+                const afficheOptionsEditor = await afficheOptionsEditorPromise;
+                if (afficheOptionsEditor) {
+                    errors = errors.concat(afficheOptionsEditor.validate());
+                }
                 if (errors.length > 0) {
                     alert("Errors must be fixed first.");
-                    return;
+                    return false;
                 }
 
                 let schedule = scheduleEditor.getValue();
-
-                const oldIdentifier = scheduleList.value;
+                if (afficheOptionsEditor) {
+                    schedule.affiche_options = afficheOptionsEditor.getValue();
+                }
                 const index = schedules.findIndex(item => item.identifier === oldIdentifier);
                 const response = await fetch(index >= 0 ?
                     new Request(`/schedules?identifier=${oldIdentifier}`,
@@ -178,7 +265,7 @@
 
                 if (!response.ok) {
                     alert(`Error: ${await response.text()}`);
-                    return;
+                    return false;
                 }
 
                 schedule = await response.json();
@@ -194,27 +281,31 @@
                 }
 
                 scheduleList.dispatchEvent(new Event('change'));
-            });
+                return true;
+            }, scheduleSaveButtonGroup));
 
-            const collectionAddButton = document.getElementById("collection-add-button")
-            const collectionRemoveButton = document.getElementById("collection-remove-button")
+            const collectionAddButton = document.getElementById("collection-add-button");
+            const collectionRemoveButton = document.getElementById("collection-remove-button");
+            const collectionAddRemoveGroup = document.getElementById("collection-add-remove-group");
+            const collectionSaveButtonGroup = document.getElementById("collection-save-button-group");
             const collectionSaveButton = document.getElementById("collection-save-button");
-            collectionAddButton.addEventListener("click", async () => {
+            collectionAddButton.addEventListener("click", () => withStatusIcon(async () => {
                 await setCollectionEditorValue(collectionDefaultValue);
                 collectionList.selectedIndex = -1;
                 collectionList.dispatchEvent(new Event('change'));
-            });
-            collectionRemoveButton.addEventListener("click", async () => {
+                return true;
+            }, collectionAddRemoveGroup));
+            collectionRemoveButton.addEventListener("click", () => withStatusIcon(async () => {
                 const index = findItemIndexByIdentifier(collections, collectionList.value);
                 if (index < 0) {
-                    return;
+                    return false;
                 }
 
                 const collection = collections[index];
                 const response = await fetch(new Request(`/collections?identifier=${collection.identifier}`, {method: "DELETE"}));
                 if (!response.ok) {
                     alert(`Error: ${await response.text()}`);
-                    return;
+                    return false;
                 }
 
                 collections.splice(index, 1);
@@ -227,12 +318,13 @@
                 }
 
                 collectionList.dispatchEvent(new Event('change'));
-            });
-            collectionSaveButton.addEventListener("click", async () => {
+                return true;
+            }, collectionAddRemoveGroup));
+            collectionSaveButton.addEventListener("click", () => withStatusIcon(async () => {
                 const oldIdentifier = collectionList.value;
 
                 if (settingsEditorPromise === null) {
-                    return;
+                    return false;
                 }
 
                 const settingsEditor = await settingsEditorPromise;
@@ -240,7 +332,7 @@
                 const errors = collectionEditor.validate().concat(settingsEditor.validate());
                 if (errors.length > 0) {
                     alert("Errors must be fixed first.");
-                    return;
+                    return false;
                 }
 
                 let collection = collectionEditor.getValue();
@@ -263,7 +355,7 @@
 
                 if (!response.ok) {
                     alert(`Error: ${await response.text()}`);
-                    return;
+                    return false;
                 }
 
                 collection = await response.json();
@@ -279,8 +371,10 @@
                 }
 
                 collectionList.dispatchEvent(new Event('change'));
-            });
+                return true;
+            }, collectionSaveButtonGroup));
 
+            const scheduleRefreshGroup = document.getElementById("schedule-refresh-group");
             const scheduleRefreshButton = document.getElementById("schedule-refresh");
             const refreshDelayInput = document.getElementById("refresh-delay");
             scheduleRefreshButton.addEventListener("click", async () => {
@@ -288,16 +382,17 @@
                     return;
                 }
 
-                await fetch(new Request("/refresh", {
+                await withStatusIcon(async () => (await fetch(new Request("/refresh", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
                         "identifier": scheduleList.value,
                         "delay": refreshDelayInput.valueAsNumber
                     })
-                }));
+                }))).ok, scheduleRefreshGroup);
             });
 
+            const scheduleScanGroup = document.getElementById("schedule-scan-group");
             const scheduleScanButton = document.getElementById("schedule-scan");
             const scanDelayInput = document.getElementById("scan-delay");
             scheduleScanButton.addEventListener("click", async () => {
@@ -305,14 +400,14 @@
                     return;
                 }
 
-                await fetch(new Request("/scan", {
+                await withStatusIcon(async () => (await fetch(new Request("/scan", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
                         "identifier": collectionList.value,
                         "delay": scanDelayInput.valueAsNumber
                     })
-                }));
+                }))).ok, scheduleScanGroup);
             });
         </script>
     </head>
@@ -325,17 +420,20 @@
                     <div class="expo-list-and-properties" >
                         <div class="expo-list">
                             <select class="expo-list__select" id="schedule-list" name="schedules" size="5"></select>
-                            <div class="expo-list__add-remove">
+                            <div class="expo-list__add-remove" id="schedule-add-remove-group">
                                 <button class="expo-list__button" id="schedule-add-button">+</button>
                                 <button class="expo-list__button" id="schedule-remove-button">-</button>
                             </div>
                         </div>
                         <div class="expo-property-group">
                             <div class="expo-properties" id="schedule-editor"></div>
-                            <button class="expo-property-group__save-button" id="schedule-save-button">Save</button>
+                            <div class="expo-properties" id="affiche-options-editor"></div>
+                            <div id="schedule-save-button-group">
+                                <button class="expo-property-group__save-button" id="schedule-save-button">Save</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="expo-refresh-scan">
+                    <div class="expo-refresh-scan" id="schedule-refresh-group">
                         <button class="expo-schedule-refresh" id="schedule-refresh">Schedule refresh</button>
                         <label for="refresh-delay">Delay</label>
                         <input type="number" class="expo-delay-input" id="refresh-delay" name="delay" value="0" min="0" /> seconds
@@ -343,10 +441,10 @@
                 </div>
                 <div class="expo-content-item">
                     <div class="expo-item-title">Collections</div>
-                    <div class="expo-list-and-properties" >
+                    <div class="expo-list-and-properties">
                         <div class="expo-list">
                             <select class="expo-list__select" id="collection-list" name="collections" size="5"></select>
-                            <div class="expo-list__add-remove">
+                            <div class="expo-list__add-remove" id="collection-add-remove-group">
                                 <button class="expo-list__button" id="collection-add-button">+</button>
                                 <button class="expo-list__button" id="collection-remove-button">-</button>
                             </div>
@@ -354,10 +452,12 @@
                         <div class="expo-property-group">
                             <div class="expo-properties" id="collection-editor"></div>
                             <div class="expo-properties" id="settings-editor"></div>
-                            <button class="expo-property-group__save-button" id="collection-save-button">Save</button>
+                            <div id="collection-save-button-group">
+                                <button class="expo-property-group__save-button" id="collection-save-button">Save</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="expo-refresh-scan">
+                    <div class="expo-refresh-scan" id="schedule-scan-group">
                         <button class="expo-schedule-scan" id="schedule-scan">Schedule scan</button>
                         <label for="scan-delay">Delay</label>
                         <input type="number" class="expo-delay-input" id="scan-delay" name="delay" value="0" min="0" /> seconds

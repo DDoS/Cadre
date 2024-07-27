@@ -48,7 +48,7 @@ will output `test_data/colors.bin` (palette'd image as raw unsigned bytes) and
 `test_data/colors_preview.png` as a preview. Run with `-h` for more information.
 
 If you're running on a machine that has the "Pimoroni Inky" Python library installed, you
-can use [write_to_display.py](encre/misc/write_to_display.py) instead to directly write an image
+can use [write_to_inky.py](encre/misc/write_to_inky.py) instead to directly write an image
 to the display. This assumes an ACeP 7-Color e-ink display, but handles various resolutions.
 To use a different palette, call `py_encre.make_palette_xyz` or `py_encre.make_palette_lab`.
 If you're lucky, your display data sheet will have the CIE Lab values for each colour,

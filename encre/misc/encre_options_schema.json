@@ -1,0 +1,103 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+        "SettingsSchema": {
+            "properties": {
+                "rotation": {
+                    "title": "Rotation",
+                    "type": "string",
+                    "enum": [
+                        "automatic",
+                        "landscape",
+                        "portrait",
+                        "landscape_upside_down",
+                        "portrait_upside_down"
+                    ],
+                    "propertyOrder": 0,
+                    "options": {
+                        "enum_titles": [
+                            "Automatic",
+                            "Landscape",
+                            "Portrait",
+                            "Landscape upside-down",
+                            "Portrait upside-down"
+                        ]
+                    }
+                },
+                "dynamic_range": {
+                    "title": "Dynamic range",
+                    "type": "number",
+                    "propertyOrder": 10,
+                    "options": {
+                        "inputAttributes": {
+                            "placeholder": "ex: 0.95"
+                        }
+                    }
+                },
+                "exposure": {
+                    "title": "Exposure",
+                    "type": "number",
+                    "propertyOrder": 20,
+                    "options": {
+                        "inputAttributes": {
+                            "placeholder": "ex: 1.5"
+                        }
+                    }
+                },
+                "brightness": {
+                    "title": "Brightness",
+                    "type": "number",
+                    "propertyOrder": 30,
+                    "options": {
+                        "inputAttributes": {
+                            "placeholder": "ex: 10"
+                        }
+                    }
+                },
+                "contrast": {
+                    "title": "Contrast",
+                    "type": "number",
+                    "propertyOrder": 40,
+                    "options": {
+                        "inputAttributes": {
+                            "placeholder": "ex: 0.6"
+                        }
+                    }
+                },
+                "sharpening": {
+                    "title": "Sharpening",
+                    "type": "number",
+                    "propertyOrder": 50,
+                    "options": {
+                        "inputAttributes": {
+                            "placeholder": "ex: 4"
+                        }
+                    }
+                },
+                "clipped_chroma_recovery": {
+                    "title": "Clipped chroma recovery",
+                    "type": "number",
+                    "propertyOrder": 60,
+                    "options": {
+                        "inputAttributes": {
+                            "placeholder": "ex: 1"
+                        }
+                    }
+                },
+                "error_attenuation": {
+                    "title": "Dither error attenuation",
+                    "type": "number",
+                    "propertyOrder": 70,
+                    "options": {
+                        "inputAttributes": {
+                            "placeholder": "ex: 0.1"
+                        }
+                    }
+                }
+            },
+            "type": "object",
+            "additionalProperties": false
+        }
+    },
+    "$ref": "#/definitions/SettingsSchema"
+}

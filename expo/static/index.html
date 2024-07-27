@@ -5,11 +5,11 @@
         <link rel="stylesheet" href="static/index.css">
         <script src="static/third_party/jsoneditor.js"></script>
         <script type="module">
-            const fetchJson = async (endpoint, defaultValue) =>
-            {
+            const fetchJson = async (endpoint, defaultValue) => {
                 const response = await fetch(new Request(endpoint));
                 return response.ok ? await response.json() : defaultValue;
             };
+
             const schedules = await fetchJson("/schedules", []);
             const collections = await fetchJson("/collections", []);
 
@@ -24,12 +24,11 @@
             JSONEditor.defaults.options.no_additional_properties = true;
 
             const makePropertyEditor = async (schemaUrl, editorId, options) => {
-                const response = await fetch(new Request(schemaUrl));
-                if (!response.ok) {
+                const schema = await fetchJson(new Request(schemaUrl));
+                if (!schema) {
                     return null;
                 }
 
-                const schema = await response.json();
                 const editor = new JSONEditor(document.getElementById(editorId), {
                     schema: schema,
                     ...options

@@ -1,7 +1,7 @@
 {
     "TEMP_PATH": "temp",
     "DISPLAY_WRITER_COMMAND": [
-        "../encre/misc/write_to_display.py",
+        "../encre/misc/write_to_inky.py",
         "--palette", "waveshare_7_color",
         "--status"
     ],

@@ -107,6 +107,11 @@ def setup_app_config(app: Flask):
         raise Exception(f'Display writer executable not found: "{display_writer_path}"')
     app.config['DISPLAY_WRITER_COMMAND'][0] = display_writer_path
 
+    display_writer_schema_path: Path = SERVER_PATH / app.config['DISPLAY_WRITER_SCHEMA']
+    if not display_writer_schema_path.is_file():
+        raise Exception(f'Display writer schema not found: "{display_writer_schema_path}"')
+    app.config['DISPLAY_WRITER_SCHEMA'] = display_writer_schema_path
+
     expo_address = app.config['EXPO_ADDRESS']
     if expo_address is not None:
         if expo_address == '':
@@ -329,7 +334,7 @@ def upload_file():
                        ('brightness', float), ('contrast', float), ('sharpening', float),
                        ('clipped_chroma_recovery', float), ('error_attenuation', float)]:
         try:
-            value = request.form.get(f'options.{name}', type=type)
+            value = request.form.get(f'options[{name}]', type=type)
             if value is not None:
                 options[name] = value
         except ValueError:
@@ -394,6 +399,11 @@ def preview(file_name: str):
             app.log_exception(exception)
 
         return '', 204
+
+@app.route('/display_writer_schema.json')
+def display_writer_schema():
+    with open(app.config['DISPLAY_WRITER_SCHEMA']) as schema_file:
+        return json.load(schema_file), 200
 
 @app.route('/map_tiles')
 def map():

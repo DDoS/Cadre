@@ -1,6 +1,6 @@
 These instructions will install ImageMagick and libvips to a folder inside
-the repository itself, so they don't conflict with package manager installs.
-Use "PKG_CONFIG_PATH" to make them visible to their dependents.
+their source repository itself, so they don't conflict with package manager installs.
+Use "LD_LIBRARY_PATH" and "PKG_CONFIG_PATH" to make them visible to their dependents.
 
 Install format dependencies:
     libjpeg62-turbo-dev libexif-dev librsvg2-dev libpoppler-dev libtiff-dev liblcms2-dev
@@ -11,18 +11,24 @@ Install format dependencies:
 This list of dependencies covers almost all supported image formats.
 Feel free to trim down to what actually want.
 
-Build latest ImageMagick
+Choose a directory to build the dependencies in, such as `~/source`.
+
+Build latest ImageMagick:
     run: git clone --depth 1 --branch <latest version tag>  https://github.com/ImageMagick/ImageMagick.git
     run: ./configure --with-modules --prefix="`pwd`/install"
     run: make && make install
     run: sudo ldconfig "`pwd`/ImageMagick/install/lib"
+    add to your ~/.profile:
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:<ImageMagick path>/install/lib"
+        export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:<ImageMagick path>/install/lib/pkgconfig"
+    run: . ~/.profile
 
-Build latest libvips
+Build latest libvips:
     install: meson
     run: git clone --depth 1 --branch <latest version tag> https://github.com/libvips/libvips.git
-    append to PKG_CONFIG_PATH: "<ImageMagick path>/install/lib/pkgconfig"
     run: meson setup build --buildtype=release --prefix="`pwd`/install" --libdir lib
     run: cd build && meson compile && meson install
-
-Before configuring Encre or Cru:
-    append to PKG_CONFIG_PATH: "<libvips path>/install/lib/pkgconfig"
+    add to your ~/.profile:
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:<libvips path>/install/lib"
+        export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:<libvips path>/install/lib/pkgconfig"
+    run: . ~/.profile

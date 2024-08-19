@@ -1,8 +1,9 @@
 {
     "TEMP_PATH": "temp",
     "DISPLAY_WRITER_COMMAND": [
-        "../encre/misc/write_to_display.py",
-        "--palette", "waveshare_7_color",
+        "../encre/display/write_to_display.py",
+        "simulated",
+        "--palette", "waveshare_gallery_palette",
         "--status"
     ],
     "MAP_TILES": {

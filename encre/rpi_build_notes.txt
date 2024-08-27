@@ -1,31 +1,25 @@
-Starting from a clean Raspbian Lite bookworm install.
+Starting from a clean Raspbian Lite Bookworm install.
 
-Increase size of swap:
+Increase size of swap if you have less than 2GB:
     in /etc/dphys-swapfile, set CONF_SWAPFILE=2048
     run: sudo dphys-swapfile setup
 
 Install:
-    git, git-lfs, clang, cmake, ninja-build, libvips-dev, python3-dev
+    git git-lfs g++ cmake ninja-build libvips-dev python3-dev
 
 The package manager libvips should be good enough for most use cases.
 But if you want raw image support, you'll need to build it and ImageMagick
 from scratch; don't install "libvips-dev" and see "libvips_build_notes.txt".
 
 Add vcpkg environment variables to ~/.profile:
-    export PATH="$PATH:<vcpkg path>/vcpkg"
-    export VCPKG_ROOT="<vcpkg path>/vcpkg"
-    export VCPKG_FORCE_SYSTEM_BINARIES=1
+    export VCPKG_FORCE_SYSTEM_BINARIES=1 # Required
     export VCPKG_MAX_CONCURRENCY=2 # For Zero 2
 
 Reload profile:
     run: . ~/.profile
 
-Install vcpkg:
-    clone: https://github.com/microsoft/vcpkg.git
-    run: cd vcpkg && ./vcpkg/bootstrap-vcpkg.sh
-
 Build cadre:
-    clone: https://github.com/DDoS/Cadre.git
-    export CADRE_FORCE_LOCAL_VCPKG=1
-    run: cd Cadre/encre && cmake --workflow --preset release
+    run: git clone --recurse-submodules https://github.com/DDoS/Cadre.git
+    run: cd Cadre/vcpkg && ./bootstrap-vcpkg.sh
+    run: cd ../encre && cmake --workflow --preset release
     run: cd ../cru && cmake --workflow --preset release

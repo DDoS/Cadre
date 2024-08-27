@@ -110,8 +110,9 @@ PYBIND11_MODULE(py_encre, m) {
         def_readwrite("clipped_chroma_recovery", &encre::Options::clipped_chroma_recovery).
         def_readwrite("error_attenuation", &encre::Options::error_attenuation);
 
-    m.attr("waveshare_7_color_palette") = encre::waveshare_7_color_palette;
-    m.attr("inky_7_color_palette") = encre::inky_7_color_palette;
+    m.attr("waveshare_gallery_palette_palette") = encre::waveshare_gallery_palette_palette;
+    m.attr("pimoroni_gallery_palette_palette") = encre::pimoroni_gallery_palette_palette;
+    m.attr("GDEP073E01_spectra_6_palette") = encre::GDEP073E01_spectra_6_palette;
 
     m.attr("palette_by_name") = encre::palette_by_name;
 

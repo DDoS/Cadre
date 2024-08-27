@@ -16,16 +16,22 @@ It's split up into multiple components:
 
 *Convert images to an e-ink display palette.*
 
-Functionally complete. Exposes both a C++ and a Python API.
+This is an optional component. If you're not using an e-ink display, you can instead
+use Affiche with a custom display writer script, see [below](#affiche).
 
-This module reads images files (any format supported by your libvips install),
-performs lightness adjustments and perceptual gamut mapping, and dithers to the e-ink display palette.
+Encre process read a wide variety of image formats (any supported by your libvips install).
+It performs lightness adjustments and perceptual gamut mapping, and finally dithers to
+the e-ink display palette. The final byte buffer can be sent to the display hardware.
 
-Samples results are available in [test_data](encre/test_data). Keep in mind that
-the currently available colour e-ink displays have very low gamut, so it's
+A [command line tool](encre/cli/src/main.cpp), and both a [C++](encre/core/include/encre.hpp)
+and a [Python API](encre/py/src/py_encre.cpp), are available.
+
+Samples results are available in [test_data](encre/test_data).
+They were generated for a 7.3" Pimoroni Inky Impression. Keep in mind that
+current colour e-ink display technology has rather low gamut, so it's
 normal that the images look washed out. That's what it looks like on the
-actual display. This tool focuses on at least keeping the colours as true
-to the originals are possible.
+actual display. This tool focuses on accurate colour mapping, it can't
+do miracles.
 
 ### Build
 
@@ -38,7 +44,7 @@ Other dependencies are installed by Vcpkg.
 
 You might have to upgrade CMake, Python or your C++ compiler, the logs should tell you.
 
-There are additional notes specific to the "Raspberry Pi Zero 2 W" [here](encre/rpi_build_notes.txt).
+There are additional notes [here](encre/rpi_build_notes.txt) specific for Raspberry Pi users.
 
 ### Running
 
@@ -47,10 +53,31 @@ test image conversions. For example: `build/release/cli/encre-cli test_data/colo
 will output `test_data/colors.bin` (palette'd image as raw unsigned bytes) and
 `test_data/colors_preview.png` as a preview. Run with `-h` for more information.
 
-If you're running on a machine that has the "Pimoroni Inky" Python library installed, you
-can use [write_to_display.py](encre/misc/write_to_display.py) instead to directly write an image
-to the display. This assumes an ACeP 7-Color e-ink display, but handles various resolutions.
-To use a different palette, call `py_encre.make_palette_xyz` or `py_encre.make_palette_lab`.
+If you have one of the displays listed [below](#supported-displays), you can use
+[write_to_display.py](encre/display/write_to_display.py) to directly write an image to the display.
+Pass the display name as the first argument.
+
+### Supported displays
+
+- [Pimoroni Inky Impression](https://shop.pimoroni.com/products/inky-impression-7-3):
+    - Install [requirements-pimoroni_inky](affiche/requirements-pimoroni_inky.txt)
+    - Use name "pimoroni_inky"
+- [Good Display E6 7.3" display (GDEP073E01)](https://buyepaper.com/products/gdep073e01)
+    - Install [requirements-GDEP073E01](affiche/requirements-GDEP073E01.txt).
+    - Use name "GDEP073E01"
+- Simulated
+    - Use name "simulated"
+    - No additional requirements
+    - Useful for testing, but does nothing
+
+#### Other display
+
+If your display isn't in this list, we're open to contributions!
+
+Implement the [`Display`](encre/display/display_protocol.py) protocol.
+You can looks at [`GDEP073E01.py`](encre/display/GDEP073E01.py) for an example.
+
+To create a custom palette, call `py_encre.make_palette_xyz` or `py_encre.make_palette_lab`.
 If you're lucky, your display data sheet will have the CIE Lab values for each colour,
 otherwise you can eyeball them... An example is available [here](encre/misc/rgb_palette_example.py).
 
@@ -59,8 +86,7 @@ otherwise you can eyeball them... An example is available [here](encre/misc/rgb_
 *Local web interface*
 
 After building [Encre](#encre), create a Python virtual environment, and install the
-[requirements](affiche/requirements.txt) using `pip`. If you plan on using it with a
-"Pimoroni Inky" display, then also install [requirements-inky](affiche/requirements-inky.txt)
+[requirements](affiche/requirements.txt) using `pip`.
 
 Start the server using `start.sh`. Use `stop.sh` if you need to stop the server when it's running
 in the background. You might need to change system settings to make port `80` available without
@@ -78,7 +104,8 @@ Copy the [default config](affiche/default_config.json) and name it `config.json`
 In this file you can overwrite the following fields:
 - `TEMP_PATH`: where to write the temporary files, absolute or relative to the server executable
 - `DISPLAY_WRITER_COMMAND`: the command line to run for writing a new image to the display as a list of arguments.
-Must accept the `--options <json>` and `--preview <path>` arguments to pass in the display options and the preview image output path.
+As well as the image path, it must accept the `--options <json>` and `--preview <path>` arguments to pass in the
+options and the preview image output path.
 - `MAP_TILES`: URL and options for [Leaflet `L.tileLayer()` constructor](https://leafletjs.com/reference.html#tilelayer-l-tilelayer).
 Lets you customize the map shown by Affiche. If you want an English map, I recommend the
 [Thunderforest Atlas tiles](https://www.thunderforest.com/maps/atlas/) (free account required to obtain an API key).

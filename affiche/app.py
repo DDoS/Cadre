@@ -220,6 +220,8 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
             image_info = try_load_image_info(image_path)
             if image_info is not None:
                 image_info.update(info)
+            else:
+                image_info = info
 
             while True:
                 output_line = process.stdout.readline()

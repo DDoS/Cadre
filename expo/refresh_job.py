@@ -173,18 +173,21 @@ class RefreshJob:
     def _post_photo(self, photo_info: PhotoInfo):
         host_url = f'http://{self._hostname}'
 
+        info = {
+            'info.path': photo_info.path_info,
+            'info.collection': photo_info.collection_info
+        }
+
         # If we have a local file for a non-local address, then
         # we need to stream the content instead of sending the URL.
         if not self._is_local_address:
             if photo_path := RefreshJob._try_get_local_path(photo_info.url):
-                requests.post(host_url, files={'file': open(photo_path, 'rb')}).raise_for_status()
+                requests.post(host_url, files={'file': open(photo_path, 'rb')},
+                              data=info).raise_for_status()
                 return
 
-        data = {
-            'url': photo_info.url,
-            'info.path': photo_info.path_info,
-            'info.collection': photo_info.collection_info
-        }
+        data = {'url': photo_info.url}
+        data.update(info)
         requests.post(host_url, data=data).raise_for_status()
 
 

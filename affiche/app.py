@@ -6,6 +6,7 @@ import random
 import threading
 from enum import Enum
 from pathlib import Path, PurePosixPath
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from logging.config import dictConfig
 from urllib.parse import unquote, urlsplit
@@ -13,7 +14,9 @@ from urllib.request import urlopen, urlretrieve
 from typing import Any
 
 from flask import Flask, Response, request, redirect, send_file, stream_with_context, url_for
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from marshmallow import Schema, fields
 import requests
 
 
@@ -80,6 +83,85 @@ dictConfig({
     }
 })
 
+@dataclass
+class Option:
+    type: type
+    default: Any
+
+class OptionType(Enum):
+    BOOLEAN = 'boolean'
+    NUMBER = 'number'
+    INTEGER = 'integer'
+    STRING = 'string'
+
+class OptionSchema(Schema):
+    display_name = fields.String(required=True)
+    type = fields.Enum(OptionType, by_value=True, required=True)
+    enum = fields.Dict(fields.String, fields.String)
+    default = fields.Raw(load_default=None)
+    placeholder = fields.String(load_default=None)
+
+def display_writer_parse_options(options_schema_json: dict[str, Any], options_json: dict[str, Any]):
+    OptionsSchema = Schema.from_dict(
+        {key: fields.Nested(OptionSchema) for key in options_schema_json})
+    options_schema = OptionsSchema().load(options_schema_json)
+
+    type_and_default: dict[str, Option] = {}
+    json_properties: dict[str, dict[str, Any]] = {}
+    order = 0
+    for name, option_schema in options_schema.items():
+        match option_schema['type']:
+            case OptionType.BOOLEAN:
+                Type = bool
+            case OptionType.NUMBER:
+                Type = float
+            case OptionType.INTEGER:
+                Type = int
+            case OptionType.STRING:
+                Type = str
+            case _:
+                raise ValueError()
+        default = option_schema['default']
+        if default is not None:
+            default = Type(default)
+        type_and_default[name] = Option(Type, default)
+
+        property_options = {}
+        property = {
+            'title': option_schema['display_name'],
+            'type': option_schema['type'].value,
+            'propertyOrder': order,
+            'options': property_options
+        }
+
+        if 'placeholder' in option_schema:
+            property_options['inputAttributes'] = {
+                'placeholder': option_schema['placeholder']
+            }
+
+        if 'enum' in option_schema:
+            enum = option_schema['enum']
+            property['enum'] = list(enum.keys())
+            property_options['enum_titles'] = list(enum.values())
+
+        json_properties[name] = property
+        order += 1
+
+    for name, option_default in options_json.items():
+        if name not in type_and_default:
+            raise KeyError(f'Option {name} is not in the schema')
+
+        option = type_and_default[name]
+        option.default = option.type(option_default)
+
+    json_schema = {
+        'type': 'object',
+        'properties': json_properties,
+        'additionalProperties': False
+    }
+
+    return json_schema, type_and_default
+
 
 def setup_app_config(app: Flask):
     app.config.from_file('default_config.json', load=json.load)
@@ -106,6 +188,17 @@ def setup_app_config(app: Flask):
     if not display_writer_path.is_file():
         raise Exception(f'Display writer executable not found: "{display_writer_path}"')
     app.config['DISPLAY_WRITER_COMMAND'][0] = display_writer_path
+
+    display_writer_options_schema_path: Path = SERVER_PATH / app.config['DISPLAY_WRITER_OPTIONS_SCHEMA_PATH']
+    if not display_writer_options_schema_path.is_file():
+        raise Exception(f'Display writer options schema not found: "{display_writer_options_schema_path}"')
+
+    display_writer_options = app.config['DISPLAY_WRITER_OPTIONS']
+
+    with open(display_writer_options_schema_path) as display_writer_options_schema_file:
+        display_writer_options_schema = json.load(display_writer_options_schema_file)
+        app.config['DISPLAY_WRITER_OPTIONS_SCHEMA'], app.config['DISPLAY_WRITER_OPTIONS']= \
+                display_writer_parse_options(display_writer_options_schema, display_writer_options)
 
     expo_address = app.config['EXPO_ADDRESS']
     if expo_address is not None:
@@ -291,6 +384,9 @@ def random_string() -> str:
 
 
 app = Flask(__name__)
+app.json.sort_keys = False
+app.json.include_nulls = True
+CORS(app)
 setup_app_config(app)
 app.secret_key = random_string()
 
@@ -327,11 +423,14 @@ def upload_file():
             return 'Failed to retrieve the file from the URL', 400
 
     options = {}
-    for name, type in [('rotation', str), ('dynamic_range', float), ('exposure', float),
-                       ('brightness', float), ('contrast', float), ('sharpening', float),
-                       ('clipped_chroma_recovery', float), ('error_attenuation', float)]:
+    for name, option in app.config['DISPLAY_WRITER_OPTIONS'].items():
         try:
-            value = request.form.get(f'options.{name}', type=type)
+            value = request.form.get(f'options.{name}', type=option.type)
+            if value is None:
+                # Alternate notation mandated by jsoneditor.js
+                value = request.form.get(f'options[{name}]', type=option.type)
+            if value is None:
+                value = option.default
             if value is not None:
                 options[name] = value
         except ValueError:
@@ -396,6 +495,15 @@ def preview(file_name: str):
             app.log_exception(exception)
 
         return '', 204
+
+@app.route('/display_writer_options_schema.json')
+def display_writer_options_schema():
+    return app.config['DISPLAY_WRITER_OPTIONS_SCHEMA'], 200
+
+@app.route('/display_writer_options_defaults.json')
+def display_writer_options_defaults():
+    return {name: option.default for name, option in
+            app.config['DISPLAY_WRITER_OPTIONS'].items()}, 200
 
 @app.route('/map_tiles')
 def map():

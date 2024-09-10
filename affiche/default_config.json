@@ -6,6 +6,8 @@
         "--palette", "waveshare_gallery_palette",
         "--status"
     ],
+    "DISPLAY_WRITER_OPTIONS_SCHEMA_PATH": "../encre/encre_options.json",
+    "DISPLAY_WRITER_OPTIONS": {},
     "MAP_TILES": {
         "url": "http://{s}.tile.osm.org/{z}/{x}/{y}.png",
         "options": {

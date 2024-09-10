@@ -72,6 +72,7 @@ body {
     display: flex;
     flex: 0 0 auto;
     justify-content: flex-start;
+    align-items: center;
     gap: 4px;
 }
 
@@ -132,6 +133,25 @@ body {
             flex-direction: column;
             align-items: stretch;
             gap: 4px;
+
+            /* Formatting for editable JSON properties,
+               like collection settings. */
+            > .row > div:has(> :last-child:nth-child(4)) {
+                display: flex;
+                flex-wrap: wrap;
+                row-gap: 2px;
+
+                > b {
+                    font-weight: normal;
+                }
+
+                > div > div > .form-control {
+                    > input, select {
+                        max-width: none;
+                        flex-grow: 1;
+                    }
+                }
+            }
         }
 
         .je-switcher {
@@ -149,7 +169,15 @@ body {
         flex-wrap: wrap;
 
         label {
+            display: flex;
+            flex: 1 1;
             margin-right: 8px;
+        }
+
+        > input, select {
+            display: flex;
+            flex: 0 1;
+            max-width: 50%;
         }
 
         .errmsg {
@@ -173,4 +201,16 @@ body {
 
 .expo-delay-input {
     width: 52px;
+}
+
+.expo-icon--wait::after {
+    content: ' ⏳'
+}
+
+.expo-icon--ok::after {
+    content: ' ✅'
+}
+
+.expo-icon--error::after {
+    content: ' ❌'
 }

@@ -59,6 +59,11 @@ PYBIND11_MODULE(py_encre, m) {
         def_readwrite("c", &encre::Plane::z).
         def_readwrite("d", &encre::Plane::w);
 
+    py::class_<encre::Line>(m, "Line").
+        def(py::init<float, float>()).
+        def_readwrite("a", &encre::Line::x).
+        def_readwrite("b", &encre::Line::y);
+
     py::class_<encre::Palette>(m, "Palette").
         def_readonly_static("default_target_lightness", &encre::Palette::default_target_lightness).
         def_readwrite("points", &encre::Palette::points).

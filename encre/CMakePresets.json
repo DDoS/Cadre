@@ -32,6 +32,20 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
+        },
+        {
+            "inherits": "release",
+            "name": "web",
+            "displayName": "Web",
+            "description": "Default web release",
+            "cacheVariables": {
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/../cmake/FindEmsdkToolchain.cmake",
+                "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-pthread",
+                "PKG_CONFIG_ARGN": "--define-variable=prefix=/Users/sapon/Sources/wasm-vips/build/target;--static"
+            },
+            "environment": {
+                "PKG_CONFIG_PATH": "/Users/sapon/Sources/wasm-vips/build/target/lib/pkgconfig"
+            }
         }
     ],
     "buildPresets": [
@@ -53,6 +67,13 @@
             "configurePreset": "release",
             "displayName": "Release",
             "description": "Default release"
+        },
+        {
+            "inherits": "release",
+            "name": "web",
+            "configurePreset": "web",
+            "displayName": "Web",
+            "description": "Default web release"
         }
     ],
     "workflowPresets": [
@@ -83,6 +104,21 @@
                 {
                     "type": "build",
                     "name": "release"
+                }
+            ]
+        },
+        {
+            "name": "web",
+            "displayName": "Web",
+            "description": "Default web release",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "web"
+                },
+                {
+                    "type": "build",
+                    "name": "web"
                 }
             ]
         }

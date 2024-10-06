@@ -27,7 +27,7 @@ namespace encre {
     void initialize(const char* executable_path) {
         setenv("VIPS_WARNING", "1", true);
 
-        if (VIPS_INIT(executable_path)) {
+        if (vips_init(executable_path)) {
             vips_error_exit(nullptr);
         }
     }
@@ -40,7 +40,7 @@ namespace encre {
             std::span<uint8_t> output, const char* preview_image_path) {
 
         if (output.size() < width * height) {
-            std::cerr << "Output buffer is too small\n";
+            std::cerr << "Output buffer is too small" << std::endl;
             return false;
         }
 
@@ -58,8 +58,8 @@ namespace encre {
                 image = vips::VImage::magickload(image_path);
             }
         } catch (const std::exception& magick_error) {
-            std::cerr << "VIPS load error: " << vips_load_error.what() << "\n";
-            std::cerr << "Magick load error: " << magick_error.what() << "\n";
+            std::cerr << "VIPS load error: " << vips_load_error.what() << std::endl;
+            std::cerr << "Magick load error: " << magick_error.what() << std::endl;
             return false;
         }
 
@@ -135,7 +135,7 @@ namespace encre {
                 image.write_to_file(preview_image_path);
             }
         } catch (const std::exception& error) {
-            std::cerr << error.what() << "\n";
+            std::cerr << "Error: \"" << error.what() << "\"" << std::endl;
             return false;
         }
 

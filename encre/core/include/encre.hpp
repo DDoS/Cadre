@@ -51,13 +51,17 @@ namespace encre {
         using glm::vec4::vec4;
     };
 
+    struct Line : glm::vec2 {
+        using glm::vec2::vec2;
+    };
+
     struct Palette {
         static constexpr float default_target_lightness = 80;
 
         std::vector<Oklab> points;
         std::vector<Oklab> gamut_vertices;
         std::vector<Plane> gamut_planes;
-        glm::vec2 gray_line{};
+        Line gray_line{};
         float lightness_range{};
         float max_chroma{};
     };
@@ -107,7 +111,7 @@ namespace encre {
     // Measured as best I could from: https://buyepaper.com/products/gdep073e01
     ENCRE_EXPORT extern const Palette GDEP073E01_spectra_6_palette;
 
-    ENCRE_EXPORT extern const std::map<std::string, const Palette*> palette_by_name;
+    ENCRE_EXPORT extern const std::map<std::string, Palette> palette_by_name;
 
     ENCRE_EXPORT void initialize(const char* executable_path);
 

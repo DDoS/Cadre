@@ -70,7 +70,7 @@ int main(int arg_count, char** arg_values) {
 
     auto palette = &encre::waveshare_gallery_palette_palette;
     if (const auto value = arguments.present("-l"))
-        palette = encre::palette_by_name.at(*value);
+        palette = &encre::palette_by_name.at(*value);
 
     encre::Options options{};
     if (const auto value = arguments.present("-r"))

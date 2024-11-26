@@ -33,6 +33,38 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
+        },
+        {
+            "inherits": "base",
+            "name": "web",
+            "hidden": true,
+            "cacheVariables": {
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/../cmake/FindEmsdkToolchain.cmake",
+                "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-pthread",
+                "PKG_CONFIG_ARGN": "--define-variable=prefix=$env{WASM_VIPS_OUTPUT}"
+            },
+            "environment": {
+                "WASM_VIPS_OUTPUT": "/Users/sapon/Sources/wasm-vips/build/target",
+                "PKG_CONFIG_PATH": "$env{WASM_VIPS_OUTPUT}/lib/pkgconfig"
+            }
+        },
+        {
+            "inherits": "web",
+            "name": "web-debug",
+            "displayName": "Web debug",
+            "description": "Default web debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "inherits": "web",
+            "name": "web-release",
+            "displayName": "Web release",
+            "description": "Default web release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         }
     ],
     "buildPresets": [
@@ -54,6 +86,20 @@
             "configurePreset": "release",
             "displayName": "Release",
             "description": "Default release"
+        },
+        {
+            "inherits": "base",
+            "name": "web-release",
+            "configurePreset": "web-release",
+            "displayName": "Web release",
+            "description": "Default web release"
+        },
+        {
+            "inherits": "base",
+            "name": "web-debug",
+            "configurePreset": "web-debug",
+            "displayName": "Web debug",
+            "description": "Default web debug"
         }
     ],
     "workflowPresets": [
@@ -84,6 +130,36 @@
                 {
                     "type": "build",
                     "name": "release"
+                }
+            ]
+        },
+        {
+            "name": "web-release",
+            "displayName": "Web release",
+            "description": "Default web release",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "web-release"
+                },
+                {
+                    "type": "build",
+                    "name": "web-release"
+                }
+            ]
+        },
+        {
+            "name": "web-debug",
+            "displayName": "Web debug",
+            "description": "Default web debug",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "web-debug"
+                },
+                {
+                    "type": "build",
+                    "name": "web-debug"
                 }
             ]
         }

@@ -44,7 +44,7 @@ namespace {
     glm::vec3 clamp_to_palette_gamut(const encre::Palette& palette, float clipped_chroma_recovery, const glm::vec3& lab) {
         const auto chroma = glm::length(glm::yz(lab));
         const auto alpha = clipped_chroma_recovery;
-        const auto min_max_gray = palette.gray_line + glm::vec2(epsilon, -epsilon);
+        const auto min_max_gray = palette.gray_line + encre::Line(epsilon, -epsilon);
         if (chroma < epsilon) {
             return {glm::clamp(lab.x, palette.gray_line.x, palette.gray_line.y), 0, 0};
         }

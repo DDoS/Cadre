@@ -59,6 +59,11 @@ PYBIND11_MODULE(py_encre, m) {
         def_readwrite("c", &encre::Plane::z).
         def_readwrite("d", &encre::Plane::w);
 
+    py::class_<encre::Line>(m, "Line").
+        def(py::init<float, float>()).
+        def_readwrite("a", &encre::Line::x).
+        def_readwrite("b", &encre::Line::y);
+
     py::class_<encre::Palette>(m, "Palette").
         def_readonly_static("default_target_lightness", &encre::Palette::default_target_lightness).
         def_readwrite("points", &encre::Palette::points).
@@ -127,12 +132,61 @@ PYBIND11_MODULE(py_encre, m) {
             }, py::arg("colors"), py::arg("target_lightness") = encre::Palette::default_target_lightness, "Make a palette from CIE Lab colors");
 
     m.def("convert", [](const char* image_path, const encre::Palette& palette, py::array_t<uint8_t> output,
-                        const encre::Options& options, const char* preview_image_path) {
+                    const encre::Options& options) -> std::optional<encre::Rotation> {
                 auto mutable_output = output.mutable_unchecked<2>();
                 const std::span<uint8_t> output_span{mutable_output.mutable_data(0, 0), static_cast<size_t>(mutable_output.size())};
-                return encre::convert(image_path, static_cast<uint32_t>(mutable_output.shape(1)), static_cast<uint32_t>(mutable_output.shape(0)),
-                        palette, options, output_span, preview_image_path);
+                encre::Rotation output_rotation{};
+                if (!encre::convert(image_path, static_cast<uint32_t>(mutable_output.shape(1)),
+                        palette, options, output_span, &output_rotation)) {
+                    return std::nullopt;
+                }
+                return output_rotation;
             },
             py::arg("image_path"), py::arg("palette"), py::arg("output").noconvert(), py::kw_only(),
-            py::arg("options") = encre::Options{}, py::arg("preview_image_path") = static_cast<const char*>(nullptr), "Convert an image to the palette");
+            py::arg("options") = encre::Options{}, "Convert an image to the palette");
+
+    m.def("write_preview", [](py::array_t<const uint8_t> converted, const std::vector<encre::Oklab>& palette_points,
+                    const encre::Rotation& output_rotation, const char* image_path) {
+                auto output_unchecked = converted.unchecked<2>();
+                const std::span<const uint8_t> converted_span{output_unchecked.data(0, 0), static_cast<size_t>(output_unchecked.size())};
+                return encre::write_preview(converted_span, static_cast<uint32_t>(output_unchecked.shape(1)),
+                        palette_points, output_rotation, image_path);
+            },
+            py::arg("converted").noconvert(), py::arg("palette_points"),
+            py::arg("output_rotation"), py::arg("image_path"), "Write a preview of a conversion output");
+
+    m.def("write_encre_file", [](py::array_t<const uint8_t> converted, const std::vector<encre::Oklab>& palette_points,
+                    const encre::Rotation& output_rotation, const char* image_path) {
+                auto output_unchecked = converted.unchecked<2>();
+                const std::span<const uint8_t> converted_span{output_unchecked.data(0, 0), static_cast<size_t>(output_unchecked.size())};
+                return encre::write_encre_file(converted_span, static_cast<uint32_t>(output_unchecked.shape(1)),
+                        palette_points, output_rotation, image_path);
+            },
+            py::arg("converted").noconvert(), py::arg("palette_points"),
+            py::arg("output_rotation"), py::arg("image_path"), "Write a binary for a conversion output");
+
+    m.def("read_encre_file", [](const char* image_path) {
+                std::vector<uint8_t> converted;
+                uint32_t width;
+                std::vector<encre::Oklab> palette_points;
+                encre::Rotation output_rotation;
+                using ReturnType = std::optional<decltype(std::make_tuple(converted, width, palette_points, output_rotation))>;
+                if (!encre::read_encre_file(image_path, converted, width, palette_points, output_rotation)) {
+                    return ReturnType{};
+                }
+                return ReturnType{std::make_tuple(std::move(converted), width, std::move(palette_points), output_rotation)};
+            }, py::arg("image_path"), "Read a binary written by write_encre_file()");
+
+    m.def("read_compatible_encre_file", [](const char* image_path, size_t palette_size, py::array_t<uint8_t> output) ->
+                    std::optional<encre::Rotation> {
+                auto mutable_output = output.mutable_unchecked<2>();
+                const std::span<uint8_t> output_span{mutable_output.mutable_data(0, 0), static_cast<size_t>(mutable_output.size())};
+                encre::Rotation output_rotation;
+                if (!encre::read_compatible_encre_file(image_path, static_cast<uint32_t>(mutable_output.shape(1)), palette_size,
+                        output_span, &output_rotation)) {
+                    return std::nullopt;
+                }
+                return output_rotation;
+            }, py::arg("image_path"), py::arg("output").noconvert(), py::arg("palette_size"),
+            "Read a binary written by write_encre_file() if the size and palette match");
 }

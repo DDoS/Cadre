@@ -13,6 +13,7 @@ target_include_directories(encre PUBLIC "include")
 target_sources(encre PRIVATE
     "include/encre.hpp"
     "${export_header_path}"
+    "src/file_io.cpp"
     "src/lightness.hpp"
     "src/lightness.cpp"
     "src/dither.hpp"

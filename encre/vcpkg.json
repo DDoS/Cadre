@@ -6,11 +6,36 @@
     "license": "AGPL-3.0",
     "dependencies": [
         "qhull",
-        "glm",
-        "pybind11",
-        "argparse"
+        "glm"
+    ],
+    "features": {
+        "py-encre": {
+            "description": "Python bindings",
+            "dependencies": [
+                "pybind11"
+            ]
+        },
+        "cli": {
+            "description": "command line tool",
+            "dependencies": [
+                "argparse"
+            ]
+        }
+    },
+    "default-features": [
+        {
+            "name": "py-encre",
+            "platform": "!emscripten"
+        },
+        {
+            "name": "cli",
+            "platform": "!emscripten"
+        }
     ],
     "vcpkg-configuration": {
+        "overlay-triplets": [
+            "../vcpkg-triplets"
+        ],
         "overlay-ports": [
             "../vcpkg-overlays/python3"
         ]

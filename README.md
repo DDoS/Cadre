@@ -130,6 +130,13 @@ privileges. The simplest solution is to run `sudo sysctl -w net.ipv4.ip_unprivil
 
 The server should be available at the host's LAN address on port `80`.
 
+To post a picture to Affiche without the web interface, simply send it as a `multipart/form-data`
+as a `file` or `url` key:
+```sh
+curl cadre.local -F file=@image.jpg
+curl cadre.local -F url=https://upload.wikimedia.org/wikipedia/commons/7/70/African_leopard_male_%28cropped%29.jpg
+```
+
 If you want image metadata support (EXIF information and geolocation), you need to build [Cru](#cru).
 
 [<img src="images/affiche_screenshot.png" width="400"/>](images/affiche_screenshot.png)
@@ -175,7 +182,7 @@ which fails to resolve.
 Make sure that you have the `.local` address in the `/etc/hosts` file, and that it appears before the hostname.
 For example: `127.0.1.1	cadre.local cadre`
 
-##  Expo
+## Expo
 
 *Automatic photo update service*
 

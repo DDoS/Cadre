@@ -52,10 +52,10 @@ namespace encre {
     );
 
     // Using std::map to keep the name ordering consistent
-    const std::map<std::string, const Palette*> palette_by_name{
-        {"waveshare_gallery_palette", &waveshare_gallery_palette_palette},
-        {"pimoroni_gallery_palette", &pimoroni_gallery_palette_palette},
-        {"GDEP073E01_spectra_6", &GDEP073E01_spectra_6_palette},
+    const std::map<std::string, Palette> palette_by_name{
+        {"waveshare_gallery_palette", waveshare_gallery_palette_palette},
+        {"pimoroni_gallery_palette", pimoroni_gallery_palette_palette},
+        {"GDEP073E01_spectra_6", GDEP073E01_spectra_6_palette},
     };
 
     Palette make_palette(std::span<const CIEXYZ> colors, float target_lightness) {

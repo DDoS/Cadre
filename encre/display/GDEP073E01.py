@@ -123,9 +123,8 @@ class GDEP073E01:
             self._gpio.setup(self.reset_pin, self._gpio.OUT, initial=self._gpio.HIGH, pull_up_down=self._gpio.PUD_OFF)
             self._gpio.setup(self.busy_pin, self._gpio.IN, pull_up_down=self._gpio.PUD_OFF)
 
-            if self._spi_bus is None:
-                self._spi_bus = spidev.SpiDev()
-
+        if self._spi_bus is None:
+            self._spi_bus = spidev.SpiDev()
             self._spi_bus.open(0, self.cs_channel)
             self._spi_bus.max_speed_hz = 5000000
 

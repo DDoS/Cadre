@@ -57,9 +57,9 @@ namespace {
             return -1;
         }
 
-        g_object_set(object, "out", vips_image_new(), NULL);
+        g_object_set(object, "out", vips_image_new(), nullptr);
 
-        if (vips_image_pipelinev(xyz_to_oklab->out, VIPS_DEMAND_STYLE_THINSTRIP, xyz_to_oklab->in, NULL)) {
+        if (vips_image_pipelinev(xyz_to_oklab->out, VIPS_DEMAND_STYLE_THINSTRIP, xyz_to_oklab->in, nullptr)) {
             return -1;
         }
 
@@ -145,9 +145,9 @@ namespace {
             return -1;
         }
 
-        g_object_set(object, "out", vips_image_new(), NULL);
+        g_object_set(object, "out", vips_image_new(), nullptr);
 
-        if (vips_image_pipelinev(oklab_to_xyz->out, VIPS_DEMAND_STYLE_THINSTRIP, oklab_to_xyz->in, NULL)) {
+        if (vips_image_pipelinev(oklab_to_xyz->out, VIPS_DEMAND_STYLE_THINSTRIP, oklab_to_xyz->in, nullptr)) {
             return -1;
         }
 

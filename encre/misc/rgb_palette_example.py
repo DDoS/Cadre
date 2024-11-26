@@ -21,10 +21,17 @@ def main():
     ], target_lightness=90)
 
     image = np.zeros((480, 800), np.uint8)
-    if not py_encre.convert(str(arguments.image_in_path), palette, image,
-                            preview_image_path=str(arguments.image_out_path)):
-        print('Conversion failed')
+    rotation = py_encre.convert(str(arguments.image_in_path),
+                                        palette, image)
+    if not rotation:
+        print('Conversion failed', file=sys.stderr)
         sys.exit(1)
+
+    if not py_encre.write_preview(image, palette.points, rotation,
+                                  str(arguments.image_out_path)):
+        print('Preview creation failed', file=sys.stderr)
+        sys.exit(1)
+
 
 if __name__ == '__main__':
     sys.path.append(str(Path(__file__).absolute().parent.parent / 'build' / 'release' / 'py'))

@@ -19,7 +19,7 @@ def import_display_module(name: str) -> Display:
         return Simulated()
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description='Write an image to a display')
     parser.add_argument('display', metavar='name', type=str, help='Name of the display',
@@ -50,15 +50,25 @@ def main():
     if arguments.preview:
         preview_path = str(arguments.preview)
 
-    if not py_encre.convert(str(arguments.image_path), palette, display.buf,
-                            options=options, preview_image_path=preview_path):
-        print('Conversion failed')
-        sys.exit(1)
+    rotation = py_encre.read_compatible_encre_file(str(arguments.image_path),
+                                                  len(palette.points), display.buf)
+    if not rotation:
+        rotation = py_encre.convert(str(arguments.image_path), palette,
+                                    display.buf, options=options)
+    if not rotation:
+        print('Conversion failed', file=sys.stderr)
+        return 1
+
+    if preview_path and not py_encre.write_preview(display.buf, palette.points,
+                                                   rotation, preview_path):
+        print('Preview creation failed', file=sys.stderr)
+        return 1
 
     if arguments.status:
         print('Status: DISPLAYING')
 
     display.show()
+    return 0
 
 
 if __name__ == '__main__':
@@ -66,5 +76,8 @@ if __name__ == '__main__':
     import py_encre
 
     py_encre.initialize(sys.argv[0])
-    main()
-    py_encre.uninitalize()
+    try:
+        result = main()
+    finally:
+        py_encre.uninitalize()
+    sys.exit(result)

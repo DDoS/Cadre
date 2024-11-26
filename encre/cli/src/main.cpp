@@ -70,7 +70,7 @@ int main(int arg_count, char** arg_values) {
 
     auto palette = &encre::waveshare_gallery_palette_palette;
     if (const auto value = arguments.present("-l"))
-        palette = encre::palette_by_name.at(*value);
+        palette = &encre::palette_by_name.at(*value);
 
     encre::Options options{};
     if (const auto value = arguments.present("-r"))
@@ -87,13 +87,25 @@ int main(int arg_count, char** arg_values) {
 
     std::vector<uint8_t> output;
     output.resize(width * height);
-    if (encre::convert(input_image_path.c_str(), width, height, *palette, options,
-            output, preview_image_path.empty() ? nullptr : preview_image_path.c_str())) {
-        std::ofstream fs{output_image_path, std::ios::binary};
-        fs.write(reinterpret_cast<const char*>(output.data()), output.size() * sizeof(uint8_t));
-    } else {
-        std::cerr << "Failed\n";
+    encre::Rotation output_rotation{};
+
+    int result_code = 0;
+    if (!encre::read_compatible_encre_file(input_image_path.c_str(), width, palette->points.size(),
+            output, &output_rotation) && !(encre::convert(input_image_path.c_str(),
+            width, *palette, options, output, &output_rotation) && encre::write_encre_file(
+            output, width, palette->points, output_rotation, output_image_path.c_str()))) {
+        result_code = 1;
+        std::cerr << "Failed to convert\n";
+    }
+
+    if (result_code == 0 && !preview_image_path.empty() &&
+            !encre::write_preview(output, width, palette->points, output_rotation,
+            preview_image_path.c_str())) {
+        result_code = 1;
+        std::cerr << "Failed to write preview\n";
     }
 
     encre::uninitalize();
+
+    return result_code;
 }

@@ -27,7 +27,7 @@ namespace encre {
     void initialize(const char* executable_path) {
         setenv("VIPS_WARNING", "1", true);
 
-        if (VIPS_INIT(executable_path)) {
+        if (vips_init(executable_path)) {
             vips_error_exit(nullptr);
         }
     }
@@ -36,11 +36,16 @@ namespace encre {
         vips_shutdown();
     }
 
-    bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette, const Options& options,
-            std::span<uint8_t> output, const char* preview_image_path) {
+    bool convert(const char* image_path, uint32_t width, const Palette& palette, const Options& options,
+            std::span<uint8_t> output, Rotation* output_rotation) {
+        if (!image_path) {
+            std::cerr << "Image path is null" << std::endl;
+            return false;
+        }
 
-        if (output.size() < width * height) {
-            std::cerr << "Output buffer is too small\n";
+        const uint32_t height = output.size() / width;
+        if (height <= 0) {
+            std::cerr << "Output buffer is too small" << std::endl;
             return false;
         }
 
@@ -58,8 +63,8 @@ namespace encre {
                 image = vips::VImage::magickload(image_path);
             }
         } catch (const std::exception& magick_error) {
-            std::cerr << "VIPS load error: " << vips_load_error.what() << "\n";
-            std::cerr << "Magick load error: " << magick_error.what() << "\n";
+            std::cerr << "VIPS load error: " << vips_load_error.what() << std::endl;
+            std::cerr << "Magick load error: " << magick_error.what() << std::endl;
             return false;
         }
 
@@ -79,6 +84,10 @@ namespace encre {
             auto computed_rotation = options.rotation;
             if (computed_rotation == Rotation::automatic && image.height() > image.width()) {
                 computed_rotation = Rotation::portrait;
+            }
+
+            if (output_rotation) {
+                *output_rotation = computed_rotation;
             }
 
             switch (computed_rotation) {
@@ -111,31 +120,58 @@ namespace encre {
                 vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));
 
             dither(image, palette, options.clipped_chroma_recovery, options.error_attenuation, output);
-
-            if (preview_image_path) {
-                // Undo rotation
-                switch (computed_rotation)
-                {
-                case Rotation::automatic:
-                case Rotation::landscape:
-                default:
-                    break;
-                case Rotation::portrait:
-                    image = image.rot90();
-                    break;
-                case Rotation::portrait_upside_down:
-                    image = image.rot270();
-                    break;
-                case Rotation::landscape_upside_down:
-                    image = image.rot180();
-                    break;
-                }
-
-                image = oklab_to_xyz(image);
-                image.write_to_file(preview_image_path);
-            }
         } catch (const std::exception& error) {
-            std::cerr << error.what() << "\n";
+            std::cerr << "Error: \"" << error.what() << "\"" << std::endl;
+            return false;
+        }
+
+        return true;
+    }
+
+    bool write_preview(std::span<const uint8_t> converted, uint32_t width, std::span<const Oklab> palette_points,
+            const Rotation& output_rotation, const char* image_path) {
+        if (!image_path) {
+            std::cerr << "Image path is null" << std::endl;
+            return false;
+        }
+
+        const uint32_t height = converted.size() / width;
+        if (height <= 0) {
+            std::cerr << "Input buffer is too small" << std::endl;
+            return false;
+        }
+
+        vips::VImage image;
+        try {
+            // Underlying C API actually takes `const void *data`, cast is safe
+            auto indices = vips::VImage::new_from_memory(const_cast<uint8_t*>(converted.data()), converted.size_bytes(),
+                    width, height, 1, VIPS_FORMAT_UCHAR);
+            auto lut = vips::VImage::new_from_memory(const_cast<Oklab*>(palette_points.data()), palette_points.size_bytes(),
+                    palette_points.size(), 1, 3, VIPS_FORMAT_FLOAT);
+            image = indices.maplut(lut);
+
+            // Undo rotation
+            switch (output_rotation)
+            {
+            case Rotation::automatic:
+            case Rotation::landscape:
+            default:
+                break;
+            case Rotation::portrait:
+                image = image.rot90();
+                break;
+            case Rotation::portrait_upside_down:
+                image = image.rot270();
+                break;
+            case Rotation::landscape_upside_down:
+                image = image.rot180();
+                break;
+            }
+
+            image = oklab_to_xyz(image);
+            image.write_to_file(image_path);
+        } catch (const std::exception& error) {
+            std::cerr << "Error: \"" << error.what() << "\"" << std::endl;
             return false;
         }
 

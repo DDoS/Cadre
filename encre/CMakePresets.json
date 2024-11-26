@@ -12,7 +12,8 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
-                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../cmake/FindVcpkgToolchain.cmake"
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../cmake/FindVcpkgToolchain.cmake",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {

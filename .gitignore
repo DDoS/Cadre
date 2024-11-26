@@ -10,4 +10,5 @@ temp/
 *.out
 *.db
 
+.clangd
 .DS_Store

@@ -51,18 +51,22 @@ namespace encre {
         using glm::vec4::vec4;
     };
 
+    struct Line : glm::vec2 {
+        using glm::vec2::vec2;
+    };
+
     struct Palette {
         static constexpr float default_target_lightness = 80;
 
         std::vector<Oklab> points;
         std::vector<Oklab> gamut_vertices;
         std::vector<Plane> gamut_planes;
-        glm::vec2 gray_line{};
+        Line gray_line{};
         float lightness_range{};
         float max_chroma{};
     };
 
-    enum class Rotation {
+    enum class Rotation : uint8_t {
         automatic,
         landscape,
         portrait,
@@ -107,7 +111,7 @@ namespace encre {
     // Measured as best I could from: https://buyepaper.com/products/gdep073e01
     ENCRE_EXPORT extern const Palette GDEP073E01_spectra_6_palette;
 
-    ENCRE_EXPORT extern const std::map<std::string, const Palette*> palette_by_name;
+    ENCRE_EXPORT extern const std::map<std::string, Palette> palette_by_name;
 
     ENCRE_EXPORT void initialize(const char* executable_path);
 
@@ -117,6 +121,18 @@ namespace encre {
 
     ENCRE_EXPORT Palette make_palette(std::span<const CIELab> colors, float target_lightness = Palette::default_target_lightness);
 
-    ENCRE_EXPORT bool convert(const char* image_path, uint32_t width, uint32_t height, const Palette& palette, const Options& options,
-            std::span<uint8_t> output, const char* preview_image_path = nullptr);
+    ENCRE_EXPORT bool convert(const char* image_path, uint32_t width, const Palette& palette, const Options& options,
+            std::span<uint8_t> output, Rotation* output_rotation = nullptr);
+
+    ENCRE_EXPORT bool write_preview(std::span<const uint8_t> converted, uint32_t width, std::span<const Oklab> palette_points,
+            const Rotation& output_rotation, const char* image_path);
+
+    ENCRE_EXPORT bool write_encre_file(std::span<const uint8_t> converted, uint32_t width, std::span<const Oklab> palette_points,
+            const Rotation& output_rotation, const char* image_path);
+
+    ENCRE_EXPORT bool read_encre_file(const char* image_path, std::vector<uint8_t>& output, uint32_t& width,
+            std::vector<Oklab>& palette_points, Rotation& output_rotation);
+
+    ENCRE_EXPORT bool read_compatible_encre_file(const char* image_path, uint32_t width, size_t palette_size,
+            std::span<uint8_t> output, Rotation* output_rotation = nullptr);
 }

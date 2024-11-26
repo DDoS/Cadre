@@ -4,6 +4,7 @@ import signal
 import subprocess
 import json
 import random
+import re
 import threading
 import sys
 from enum import Enum
@@ -336,9 +337,21 @@ def random_string() -> str:
 app = Flask(__name__)
 app.json.sort_keys = False
 app.json.include_nulls = True
-CORS(app)
+CORS(app, origins=[
+    'http://localhost',
+    re.compile(r'^http://.*\.local'),
+    'https://microfiche.sapon.ca'
+], allow_private_network=True)
 setup_app_config(app)
 app.secret_key = random_string()
+
+@app.after_request
+def pna_headers(response):
+    from getmac import get_mac_address
+    response.headers['Private-Network-Access-Name'] = get_external_hostname()
+    response.headers['Private-Network-Access-ID'] = get_mac_address()
+    return response
+
 
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():

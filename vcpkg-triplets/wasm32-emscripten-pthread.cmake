@@ -1,0 +1,5 @@
+set(em_options "-pthread -fexceptions -msimd128")
+set(ENV{CFLAGS} ${em_options})
+set(ENV{CXXFLAGS} ${em_options})
+set(VCPKG_ENV_PASSTHROUGH CFLAGS CXXFLAGS)
+include("../vcpkg/triplets/community/wasm32-emscripten.cmake")

@@ -174,8 +174,10 @@ class RefreshJob:
         host_url = f'http://{self._hostname}'
 
         data = {
-            'info.path': photo_info.path_info,
-            'info.collection': photo_info.collection_info
+            'info': json.dumps({
+                'path': photo_info.path_info,
+                'collection': photo_info.collection_info
+            })
         }
 
         for name, value in self.affiche_options.items():

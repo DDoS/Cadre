@@ -15,5 +15,6 @@
             "detectRetina": true
         }
     },
-    "EXPO_ADDRESS": ""
+    "EXPO_ADDRESS": "",
+    "REDIRECT_TO": null
 }

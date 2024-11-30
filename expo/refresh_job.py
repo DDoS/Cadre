@@ -4,6 +4,8 @@ import json
 import logging
 import socket
 import sqlite3
+import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,8 +21,9 @@ import requests
 import expo_db
 from collection import get_new_photo, parse_filter, Filter, Order, PhotoInfo
 
+sys.path.append(str(Path(__file__).absolute().parent.parent / 'cru'))
+import cru_utils
 
-refresh_job_logger = logging.getLogger('refresh_job')
 
 # socket.getfqdn is broken on macOS, but platform.node() should return the correct value
 def get_external_hostname():
@@ -31,15 +34,24 @@ def get_external_hostname():
     return socket.getfqdn()
 
 
+refresh_job_logger = logging.getLogger('refresh_job')
+
+
+if not cru_utils.available:
+    refresh_job_logger.error('cru module not found: image info will not be available.')
+
+
 refresh_scheduler = BackgroundScheduler()
 refresh_scheduler.start()
 atexit.register(lambda: refresh_scheduler.shutdown())
 
 
 class RefreshJob:
+    post_commands_by_id: dict[str, list[str]]
+
     def __init__(self, id: int | None, identifier: str, display_name: str,
                  hostname: str, schedule: str, enabled: bool, filter: str | Filter,
-                 order: str | Order, affiche_options: dict[str, Any]):
+                 order: str | Order, affiche_options: dict[str, Any], post_command_id: str):
         if not expo_db.validate_identifier(identifier):
             raise ValueError('Invalid identifier')
         if len(schedule) > 0 and not croniter.is_valid(schedule):
@@ -55,6 +67,7 @@ class RefreshJob:
         self._filter = filter if isinstance(filter, Filter) else parse_filter(filter)
         self._order = order if isinstance(order, Order) else Order[order]
         self._affiche_options = affiche_options
+        self._post_command_id = post_command_id
         self._job: Job | None = None
 
 
@@ -108,6 +121,11 @@ class RefreshJob:
     @property
     def affiche_options(self):
         return self._affiche_options
+
+
+    @property
+    def post_command_id(self):
+        return self._post_command_id
 
 
     def start(self, db_path: Path):
@@ -173,11 +191,21 @@ class RefreshJob:
     def _post_photo(self, photo_info: PhotoInfo):
         host_url = f'http://{self._hostname}'
 
-        data = {
-            'info.path': photo_info.path_info,
-            'info.collection': photo_info.collection_info
+        info = {
+            'path': photo_info.path_info,
+            'collection': photo_info.collection_info
         }
 
+        if self.post_command_id:
+            command = RefreshJob.post_commands_by_id.get(self.post_command_id)
+            if not command:
+                refresh_job_logger.error(f'No post command for ID "{self.post_command_id}"')
+            else:
+                refresh_job_logger.info(f'Using post command "{self.post_command_id}"')
+                self._post_with_command(command, photo_info.url, info)
+            return
+
+        data = {'info': json.dumps(info)}
         for name, value in self.affiche_options.items():
             data[f'options.{name}'] = value
 
@@ -191,6 +219,29 @@ class RefreshJob:
 
         data['url'] = photo_info.url
         requests.post(host_url, data=data).raise_for_status()
+
+
+    def _post_with_command(self, command: list[str], url: str, info: dict[str, str]):
+        photo_path = RefreshJob._try_get_local_path(url)
+        if not photo_path:
+            refresh_job_logger.error('Posting photos with custom commands from non-local URL is not supported.'
+                                     f' URL was: "{url}"')
+            return
+
+        if image_info := cru_utils.get_image_info_dict(photo_path):
+            info.update(image_info)
+
+        command = [arg.replace('%HOSTNAME%', self.hostname) for arg in command]
+        full_command = [*command, str(photo_path), '--options', json.dumps(self.affiche_options),
+                        '--info', json.dumps(info)]
+        refresh_job_logger.debug(f'Running post command: {" ".join(repr(arg) for arg in full_command)}')
+        result = subprocess.run(full_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                universal_newlines=True, bufsize=1)
+        if result.returncode:
+            refresh_job_logger.error(f'Post command failed with result code {result.returncode}.'
+                                     f' Output:\n{result.stdout}')
+        else:
+            refresh_job_logger.debug(f'Post command output:\n{result.stdout}')
 
 
     @staticmethod
@@ -223,8 +274,9 @@ _refresh_jobs_by_identifier: dict[str, RefreshJob] | None = None
 
 def _create_refresh_job(db: sqlite3.Connection, id: int | None, identifier: str, display_name: str,
                        hostname: str, schedule: str, enabled: bool, filter: str | Filter,
-                       order: str | Order, affiche_options: dict[str, Any]) -> RefreshJob:
-    job = RefreshJob(id, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
+                       order: str | Order, affiche_options: dict[str, Any], post_command_id: str) -> RefreshJob:
+    job = RefreshJob(id, identifier, display_name, hostname, schedule,
+                     enabled, filter, order, affiche_options, post_command_id)
 
     row = {
         'id': id,
@@ -235,13 +287,15 @@ def _create_refresh_job(db: sqlite3.Connection, id: int | None, identifier: str,
         'enabled': job.enabled,
         'filter': str(job.filter),
         'order': job.order.name,
-        'affiche_options_json': json.dumps(job.affiche_options)
+        'affiche_options_json': json.dumps(job.affiche_options),
+        'post_command_id': job.post_command_id,
     }
     with db:
         id, = db.execute('INSERT INTO refresh_jobs VALUES(:id, :identifier, :display_name, :hostname, :schedule, :enabled, '
-                         ':filter, :order, :affiche_options_json) ON CONFLICT(id) DO UPDATE SET identifier = :identifier, '
-                         'display_name = :display_name, hostname = :hostname, schedule = :schedule, enabled = :enabled, '
-                         'filter = :filter, "order" = :order, affiche_options_json = :affiche_options_json RETURNING id', row).fetchone()
+                         ':filter, :order, :affiche_options_json, :post_command_id) ON CONFLICT(id) DO UPDATE SET '
+                         'identifier = :identifier, display_name = :display_name, hostname = :hostname, schedule = :schedule, '
+                         'enabled = :enabled, filter = :filter, "order" = :order, affiche_options_json = :affiche_options_json, '
+                         'post_command_id = :post_command_id RETURNING id', row).fetchone()
 
     job._id = id
     return job
@@ -256,8 +310,9 @@ def init_refresh_jobs(db_path: Path):
     try:
         db = expo_db.open(db_path)
         for row in db.execute('SELECT id, identifier, display_name, hostname, schedule, enabled, '
-                              'filter, "order", affiche_options_json FROM refresh_jobs'):
-            refresh_jobs.append(RefreshJob(row[0], row[1], row[2], row[3], row[4], bool(row[5]), row[6], row[7], json.loads(row[8])))
+                              'filter, "order", affiche_options_json, post_command_id FROM refresh_jobs'):
+            refresh_jobs.append(RefreshJob(row[0], row[1], row[2], row[3], row[4], bool(row[5]),
+                                           row[6], row[7], json.loads(row[8]), row[9]))
     except Exception:
         refresh_job_logger.exception('Invalid refresh job in the photo DB')
     finally:
@@ -290,13 +345,14 @@ def has_refresh_job(identifier: str):
 
 def add_refresh_job(db_path: Path, identifier: str, display_name: str,
                     hostname: str, schedule: str, enabled: bool, filter: str | Filter,
-                    order: str | Order, affiche_options: dict[str, Any]) -> RefreshJob:
+                    order: str | Order, affiche_options: dict[str, Any], post_command_id: str) -> RefreshJob:
     if identifier in _refresh_jobs_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
 
     try:
         db = expo_db.open(db_path)
-        job = _create_refresh_job(db, None, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
+        job = _create_refresh_job(db, None, identifier, display_name, hostname, schedule,
+                                  enabled, filter, order, affiche_options, post_command_id)
         refresh_job_logger.info(f'Added "{job.identifier}"')
     finally:
         db.close()
@@ -311,7 +367,8 @@ def add_refresh_job(db_path: Path, identifier: str, display_name: str,
 def modify_refresh_job(db_path: Path, job: RefreshJob, identifier: str | None = None,
                        display_name: str | None = None, hostname: str | None = None, schedule: str | None = None,
                        enabled: bool | None = None, filter: str | Filter | None = None,
-                       order: str | Order | None = None, affiche_options: dict[str, Any] | None = None) -> RefreshJob:
+                       order: str | Order | None = None, affiche_options: dict[str, Any] | None = None,
+                       post_command_id: str | None = None) -> RefreshJob:
     old_identifier = job.identifier
     if identifier is not None and identifier != old_identifier and identifier in _refresh_jobs_by_identifier:
         raise KeyError(f'Already in use: "{identifier}"')
@@ -332,12 +389,15 @@ def modify_refresh_job(db_path: Path, job: RefreshJob, identifier: str | None = 
         order = job.order
     if affiche_options is None:
         affiche_options = job.affiche_options
+    if post_command_id is None:
+        post_command_id = job.post_command_id
 
     job.stop()
 
     try:
         db = expo_db.open(db_path)
-        job = _create_refresh_job(db, job._id, identifier, display_name, hostname, schedule, enabled, filter, order, affiche_options)
+        job = _create_refresh_job(db, job._id, identifier, display_name, hostname, schedule,
+                                  enabled, filter, order, affiche_options, post_command_id)
         refresh_job_logger.info(f'Modified "{identifier}"')
     finally:
         db.close()

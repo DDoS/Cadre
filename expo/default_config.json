@@ -1,3 +1,4 @@
 {
-    "DB_PATH": "expo.db"
+    "DB_PATH": "expo.db",
+    "POST_COMMANDS": {}
 }

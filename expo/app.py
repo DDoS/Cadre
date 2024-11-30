@@ -1,5 +1,6 @@
 import signal
 import logging
+import os
 from enum import Enum
 from pathlib import Path
 from logging.config import dictConfig
@@ -71,11 +72,15 @@ dictConfig({
 
 def setup_app_config(app: Flask):
     app.config.from_file('default_config.json', load=json.load)
-    app.config.from_file('config.json', load=json.load, silent=True)
+
+    config_path = os.environ.get('EXPO_CONFIG_PATH', 'config.json')
+    app.config.from_file(config_path, load=json.load, silent=True)
 
     db_path: Path = SERVER_PATH / app.config['DB_PATH']
     db_path.parent.mkdir(exist_ok=True)
     app.config['DB_PATH'] = db_path
+
+    RefreshJob.post_commands_by_id = dict(app.config['POST_COMMANDS'])
 
 
 def start_background_jobs(app: Flask):
@@ -257,6 +262,8 @@ class RefreshJobSchema(Schema):
     enabled = fields.Boolean(load_default=True, metadata={'title': 'Enabled'})
     filter = fields.String(load_default='true', metadata={'title': 'Filter'})
     order = fields.Enum(Order, load_default=Order.SHUFFLE, metadata={'title': 'Order'})
+    post_command_id = fields.String(load_default='', metadata={'title': 'Post command'},
+                                    validate=OneOf(['', *RefreshJob.post_commands_by_id.keys()]))
     affiche_options = fields.Dict(load_default={}, metadata={'title': 'Affiche options'})
 
 
@@ -276,7 +283,8 @@ def schedules():
             'enabled': job.enabled,
             'filter': str(job.filter),
             'order': job.order.name,
-            'affiche_options': job.affiche_options
+            'post_command_id': job.post_command_id,
+            'affiche_options': job.affiche_options,
         }
 
     identifier = request.args.get('identifier')
@@ -307,7 +315,8 @@ def schedules():
 
                 job = add_refresh_job(app.config['DB_PATH'], identifier, display_name,
                                       result['hostname'], result['schedule'], result['enabled'],
-                                      result['filter'], result['order'], result['affiche_options'])
+                                      result['filter'], result['order'], result['affiche_options'],
+                                      result['post_command_id'])
                 app.logger.info(f'Added refresh job "{identifier}"')
                 return refresh_job_to_dict(job), 200
             except Exception as error:
@@ -337,6 +346,7 @@ def schedules():
             enabled = fields.Boolean()
             filter = fields.String()
             order = fields.Enum(Order)
+            post_command_id = fields.String()
             affiche_options = fields.Dict()
 
         try:
@@ -347,7 +357,7 @@ def schedules():
         try:
             job = modify_refresh_job(app.config['DB_PATH'], job, result.get('identifier'), result.get('display_name'),
                                      result.get('hostname'), result.get('schedule'), result.get('enabled'), result.get('filter'),
-                                     result.get('order'), result.get('affiche_options'))
+                                     result.get('order'), result.get('affiche_options'), result.get('post_command_id'))
             app.logger.info(f'Modified refresh job "{identifier}"')
             return refresh_job_to_dict(job), 200
         except Exception as error:

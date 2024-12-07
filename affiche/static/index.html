@@ -295,7 +295,7 @@
 
             let statusEvents = null;
             const listenStatusEvents = () => {
-                statusEvents = new EventSource("status");
+                statusEvents = new EventSource("status/stream");
 
                 const resetEvents = () => {
                     statusEvents.close();

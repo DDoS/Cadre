@@ -55,22 +55,36 @@ will output `test_data/colors.bin` (palette'd image as raw unsigned bytes) and
 
 If you have one of the displays listed [below](#supported-displays), you can use
 [write_to_display.py](encre/display/write_to_display.py) to directly write an image to the display.
-Pass the display name as the first argument.
+Pass the display name as the first argument. Some displays have additional options which can be
+set using `--display-config <json>`.
 
 ### Supported displays
 
 - [Pimoroni Inky Impression](https://shop.pimoroni.com/products/inky-impression-7-3):
     - Install [requirements-pimoroni_inky](affiche/requirements-pimoroni_inky.txt)
-    - Use name "pimoroni_inky"
+    - Use name `pimoroni_inky`
 - [Good Display E6 7.3" display (GDEP073E01)](https://buyepaper.com/products/gdep073e01)
     - Install [requirements-GDEP073E01](affiche/requirements-GDEP073E01.txt).
-    - Use name "GDEP073E01"
-- Simulated
-    - Use name "simulated"
+    - Use name  `GDEP073E01`
+- Proxy
+    - Use name `proxy`
     - No additional requirements
+    - Options:
+        - `width`, `height`: display width and height
+        - `url`: URL to post the image to
+    - Write the converted image to a custom binary format defined by Encre, and post it to the URL.
+    The file can then be read using the Encre API or by `write_to_display.py`. Intended for use with [Expo](#expo).
+    Useful for converting an image locally on a more capable computer before posting it to an Affiche instance
+    running on a less capable device. See [proxying](#proxying) for an example.
+- Simulated
+    - Use name `simulated`
+    - No additional requirements
+    - Options:
+        - `width`, `height`: display width and height
+        - `delay`: display simulated update time in seconds
     - Useful for testing, but does nothing
 
-#### Other display
+#### Other displays
 
 If your display isn't in this list, we're open to contributions!
 
@@ -130,12 +144,17 @@ privileges. The simplest solution is to run `sudo sysctl -w net.ipv4.ip_unprivil
 
 The server should be available at the host's LAN address on port `80`.
 
+If you want to use a different port or hostname, then use the `-p` and `-h` arguments of `start.sh`.
+When running `stop.sh` pass the same port using `-p`.
+
 To post a picture to Affiche without the web interface, simply send it as a `multipart/form-data`
 as a `file` or `url` key:
 ```sh
 curl cadre.local -F file=@image.jpg
 curl cadre.local -F url=https://upload.wikimedia.org/wikipedia/commons/7/70/African_leopard_male_%28cropped%29.jpg
 ```
+You can also populate the "Collection" and "Path" info fields by using the `info` key:
+`info='{"path":"a path", "collection": "collection name"}'`.
 
 If you want image metadata support (EXIF information and geolocation), you need to build [Cru](#cru).
 
@@ -145,19 +164,34 @@ If you want image metadata support (EXIF information and geolocation), you need 
 
 Copy the [default config](affiche/default_config.json) and name it `config.json`.
 In this file you can overwrite the following fields:
-- `TEMP_PATH`: Where to write the temporary files, absolute or relative to the server executable
-- `DISPLAY_WRITER_COMMAND`: The command line to run for writing a new image to the display as a list of arguments.
-As well as the image path, it must accept the `--options <json>` and `--preview <path>` arguments to pass in the
-options and the preview image output path.
+- `TEMP_PATH`: Where to write the temporary files, absolute or relative to the server executable.
+- `DISPLAY_WRITER_COMMAND`: The command line for writing an image to the display. See [below](#display-writer-script).
 - `DISPLAY_WRITER_OPTIONS_SCHEMA_PATH`: Path to the options schema for the display writer.
 See [encre_options.json](encre/encre_options.json) for an example.
 - `DISPLAY_WRITER_OPTIONS`: Dictionary of option name and default value override.
-For example: `{"dynamic_range": 0.8}`.
+For example: `{"dynamic_range": 0.8}`. Must respect the schema from `DISPLAY_WRITER_OPTIONS_SCHEMA_PATH`.
 - `MAP_TILES`: URL and options for [Leaflet `L.tileLayer()` constructor](https://leafletjs.com/reference.html#tilelayer-l-tilelayer).
 Lets you customize the map shown by Affiche. If you want an English map, I recommend the
 [Thunderforest Atlas tiles](https://www.thunderforest.com/maps/atlas/) (free account required to obtain an API key).
 - `EXPO_ADDRESS`: Hostname and optional port suffix for the Expo server. Must be externally reachable (i.e.: `affiche.local` instead
 of `localhost`). Optional, can be `null` to disable Expo integration. If empty, then default to the local machine network name.
+
+You can override the default config path by using the `-c` argument of `start.sh` or by setting the environment variable
+`AFFICHE_CONFIG_PATH` to your desired path. By default it's `./config.json`.
+
+### Display writer script
+
+You more than likely just want to use the default `encre/display/write_to_display.py` script. Check its `--help` output for more details.
+If you need a custom display implementation, then it's recommended to [implement the `Display` protocol](#other-displays).
+
+If you really want to use a custom script, then it must accept the following arguments (automatically populated by Affiche):
+- `<image_path>`: path to the input image.
+- `--options <json>`: options in the same format as `DISPLAY_WRITER_OPTIONS`.
+- `--info <json>`: image info, either loaded by [Cru](#cru) or user provided.
+- `--preview <path>`: output path for the web interface preview.
+
+Furthermore if you want Affiche to display the image update progress, it should output `Status: CONVERTING` and `Status: DISPLAYING`
+to `stdout` to notify of the current state.
 
 ### Tips & Help
 
@@ -199,13 +233,23 @@ Start the server using `start.sh`. Use `stop.sh` if you need to stop the server 
 The server should be available at the host's LAN address on port `21110`.
 You can run Expo on the same host as Affiche or a different one.
 
+If you want to use a different port or hostname, then use the `-p` and `-h` arguments of `start.sh`.
+When running `stop.sh` pass the same port using `-p`.
+
 [<img src="images/expo_screenshot.png" width="400"/>](images/expo_screenshot.png)
 
 ### Configuration
 
 Copy the [default config](affiche/default_config.json) and name it `config.json`.
 In this file you can overwrite the following fields:
-- `DB_PATH`: where to write the Expo persistent data, absolute or relative to the server executable
+- `DB_PATH`: where to write the Expo persistent data, absolute or relative to the server executable.
+- `POST_COMMANDS`: dictionary of custom post commands that can be used by [schedules](#schedules).
+Each command has an identifier (key), and a list of command line arguments (value).
+The arguments can contain the placeholder `%HOSTNAME%`, which will be replaced with the hostname of the
+schedule using the command. See [proxying](#proxying) for an example.
+
+You can override the default config path by using the `-c` argument of `start.sh` or by setting the environment variable
+`EXPO_CONFIG_PATH` to your desired path. By default it's `./config.json`.
 
 ### Collections
 
@@ -309,7 +353,8 @@ The JSON format is:
         // Example for Encre
         "contrast": 0.5,
         "sharpening": 2
-    }
+    },
+    "post_command_id": "" // Or an identifier from POST_COMMANDS in the config
 }
 ```
 - `identifier` must be unique, contain only characters in the set `[A-Za-z0-9_]`, and cannot start with a number
@@ -320,6 +365,7 @@ The JSON format is:
 - `filter` is optional and defaults to `"true"`
 - `order` is optional and defaults to `SHUFFLE`, see below
 - `affiche_options` is optional, override the default options for the target Affiche instance
+- `post_command_id` is optional, override the default command for posting a photo to the Affiche instance
 
 #### Filter expressions
 
@@ -368,6 +414,25 @@ Immediately trigger a schedule by `POST`ing to `/refresh` a JSON object like so:
 ```
 - `identifier` is a schedule identifier
 - `delay` a delay in seconds (float), is optional and defaults to `0`
+
+### Proxying
+
+You can have Expo convert the image locally before posting it to Affiche. This is useful if you want to run Expo on a
+more capable computer like a Raspberry Pi 4 or 5, and use cheaper computers like the Raspberry Pi Zero 2 for multiple
+Affiche instances. Once converted, the image requires very little compute power to be displayed. There's a WIP project
+to even support the Raspberry Pi Pico 2 using this mechanism.
+
+Use the Encre `proxy` display to convert locally and post the result to an Affiche instance.
+```jsonc
+"POST_COMMANDS": {
+    "inky": [
+        "../encre/display/write_to_display.py",
+        "proxy",
+        "--display-config", "{\"url\": \"http://%HOSTNAME%\", \"height\": 480, \"width\": 800}",
+        "--palette", "pimoroni_gallery_palette"
+    ]
+}
+```
 
 ## Cru
 

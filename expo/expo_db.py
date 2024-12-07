@@ -26,13 +26,17 @@ def setup(path: Path | str):
     with db:
         db.execute('CREATE TABLE IF NOT EXISTS refresh_jobs(id INTEGER PRIMARY KEY, identifier TEXT NOT NULL UNIQUE, '
                    'display_name TEXT NOT NULL, hostname TEXT NOT NULL, schedule TEXT NOT NULL, enabled INTEGER NOT NULL, '
-                   'filter TEXT NOT NULL, "order" TEXT NOT NULL, affiche_options_json TEXT)')
+                   'filter TEXT NOT NULL, "order" TEXT NOT NULL, affiche_options_json TEXT, post_command_id TEXT NOT NULL)')
         db.execute('CREATE TABLE IF NOT EXISTS collections(id INTEGER PRIMARY KEY, identifier TEXT NOT NULL UNIQUE, '
                    'display_name TEXT NOT NULL, schedule TEXT NOT NULL, enabled INTEGER NOT NULL, '
                    'class_name TEXT NOT NULL, settings_json TEXT)')
         db.execute('CREATE TABLE IF NOT EXISTS photos(id INTEGER PRIMARY KEY, collection_id INTEGER NOT NULL REFERENCES '
                    'collections(id) ON DELETE CASCADE, cycle_count INTEGER NOT NULL DEFAULT 0, display_date TEXT, '
                    'format TEXT, width INTEGER, height INTEGER, favorite INTEGER, capture_date TEXT)')
+
+        if not db.execute("SELECT COUNT(*) FROM pragma_table_info('refresh_jobs') WHERE name='post_command_id'").fetchone()[0]:
+            db.execute("ALTER TABLE refresh_jobs ADD COLUMN post_command_id TEXT NOT NULL DEFAULT ''")
+
     db.close()
 
 

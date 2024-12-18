@@ -1,9 +1,11 @@
 import logging
+import os
 import signal
 import subprocess
 import json
 import random
 import threading
+import sys
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from dataclasses import dataclass
@@ -18,6 +20,9 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from marshmallow import Schema, fields
 import requests
+
+sys.path.append(str(Path(__file__).absolute().parent.parent / 'cru'))
+import cru_utils
 
 
 # Make sure we can shutdown using SIGINT
@@ -35,26 +40,13 @@ def get_external_hostname():
     return socket.getfqdn()
 
 
-affiche_logger = logging.getLogger('affiche')
-
-
-cru_available = False
-try:
-    import sys
-    sys.path.append(str(Path(__file__).absolute().parent.parent / 'cru/build/release'))
-    import cru
-    cru_available = True
-except ModuleNotFoundError:
-    affiche_logger.error('cru module not found: image metadata will not be available.')
-
-
 SERVER_PATH = Path(__file__).parent
 
 dictConfig({
     'version': 1,
     'formatters': {
         'standard': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+            'format': '%(asctime)s [%(levelname)s] %(process)d %(name)s: %(message)s'
         }
     },
     'handlers': {
@@ -82,6 +74,14 @@ dictConfig({
         }
     }
 })
+
+
+affiche_logger = logging.getLogger('affiche')
+
+
+if not cru_utils.available:
+    affiche_logger.error('cru module not found: image info will not be available.')
+
 
 @dataclass
 class Option:
@@ -165,7 +165,9 @@ def display_writer_parse_options(options_schema_json: dict[str, Any], options_js
 
 def setup_app_config(app: Flask):
     app.config.from_file('default_config.json', load=json.load)
-    app.config.from_file('config.json', load=json.load, silent=True)
+
+    config_path = os.environ.get('AFFICHE_CONFIG_PATH', 'config.json')
+    app.config.from_file(config_path, load=json.load, silent=True)
 
     def delete_all_files(directory: Path):
         [file.unlink() for file in directory.iterdir() if file.is_file()]
@@ -217,104 +219,51 @@ display_writer_last_sub_status = DisplayWriterSubStatus.NONE
 display_writer_image_info: dict[str, Any] | None = None
 display_writer_last_preview: Path | None = None
 
-def update_display_writer_preview_locked(preview_path: Path):
-    global display_writer_last_preview
-
-    try:
-        if not preview_path.exists():
-            return
-
-        if display_writer_last_preview is not None:
-            if display_writer_last_preview.samefile(preview_path):
-                return
-
-            display_writer_last_preview.unlink(missing_ok=True)
-            display_writer_last_preview = None
-
-        display_writer_last_preview = preview_path
-    except Exception:
-        affiche_logger.exception('Failed to update preview')
-        if preview_path is not None:
-            preview_path.unlink(missing_ok=True)
-
-def try_load_image_info(path: Path) -> dict[str, Any] | None:
-    if not cru_available:
-        return None
-
-    try:
-        data = cru.load_image_info(str(path))
-        if not data:
-            return None
-
-        fields = {}
-
-        if data.times.original:
-            capture_date = datetime.fromtimestamp(data.times.original.seconds, timezone.utc)
-            capture_date = capture_date.astimezone(timezone(timedelta(seconds=data.times.original.offset)))
-            fields['captureDateTime'] = capture_date.isoformat()
-        if data.times.gps:
-            if data.times.gps.date_only:
-                fields['gpsDate'] = date.fromtimestamp(data.times.gps.seconds).isoformat()
-            else:
-                fields['gpsDateTime'] = datetime.fromtimestamp(data.times.gps.seconds, timezone.utc).isoformat()
-
-        if data.make_and_model.camera:
-            fields['cameraMakeAndModel'] = data.make_and_model.camera
-        if data.make_and_model.lens:
-            fields['lensMakeAndModel'] = data.make_and_model.lens
-
-        if data.camera_settings.aperture:
-            fields['apertureSetting'] = data.camera_settings.aperture
-        if data.camera_settings.exposure:
-            fields['exposureSetting'] = data.camera_settings.exposure
-        if data.camera_settings.iso:
-            fields['isoSetting'] = data.camera_settings.iso
-        if data.camera_settings.focal_length:
-            fields['focalLengthSetting'] = data.camera_settings.focal_length
-
-        if data.gps.longitude:
-            fields['gpsLongitude'] = data.gps.longitude
-        if data.gps.latitude:
-            fields['gpsLatitude'] = data.gps.latitude
-        if data.gps.altitude:
-            fields['gpsAltitude'] = data.gps.altitude
-        if data.gps.speed:
-            fields['gpsSpeed'] = data.gps.speed
-        if data.gps.direction:
-            fields['gpsDirection'] = data.gps.direction
-        fields['gpsZeroDirection'] = data.gps.zero_direction.name
-
-        return fields
-    except Exception:
-        return None
-
 def run_display_writer(command: list[Path | str], image_path: Path, preview_path: Path,
-                       options: dict[str], info: dict[str]) -> bool:
+                       options: dict[str], info: dict[str, Any]) -> bool:
     global display_writer_last_status
 
     if display_writer_last_status == DisplayWriterStatus.BUSY:
         return False
+
+    def update_preview_locked():
+        global display_writer_last_preview
+
+        try:
+            if not preview_path.exists():
+                return
+
+            if display_writer_last_preview is not None:
+                if display_writer_last_preview.samefile(preview_path):
+                    return
+
+                display_writer_last_preview.unlink(missing_ok=True)
+                display_writer_last_preview = None
+
+            display_writer_last_preview = preview_path
+        except Exception:
+            affiche_logger.exception('Failed to update preview')
+            preview_path.unlink(missing_ok=True)
 
     def run():
         global display_writer_last_status
         global display_writer_last_sub_status
         global display_writer_image_info
 
+        process = None
         try:
-            options_string = json.dumps(options)
-            process = subprocess.Popen([*command, image_path, '--options', options_string, '--preview', preview_path],
-                                        stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
+            if image_info := cru_utils.get_image_info_dict(image_path):
+                info.update(image_info)
+
+            full_command = [*command, image_path, '--options', json.dumps(options),
+                            '--info', json.dumps(info), '--preview', preview_path]
+            process = subprocess.Popen(full_command, stdout=subprocess.PIPE,
+                                       universal_newlines=True, bufsize=1)
 
             with display_writer_update_lock:
                 display_writer_last_status = DisplayWriterStatus.BUSY
                 display_writer_last_sub_status = DisplayWriterSubStatus.LAUNCHING
                 display_writer_update_lock.notify_all()
-
-            image_info = try_load_image_info(image_path)
-            if image_info is not None:
-                image_info.update(info)
-            else:
-                image_info = info
 
             while True:
                 output_line = process.stdout.readline()
@@ -324,8 +273,8 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
                         with display_writer_update_lock:
                             display_writer_last_sub_status = DisplayWriterSubStatus[status_string]
                             if display_writer_last_sub_status == DisplayWriterSubStatus.DISPLAYING:
-                                display_writer_image_info = image_info
-                                update_display_writer_preview_locked(preview_path)
+                                display_writer_image_info = info
+                                update_preview_locked()
                             display_writer_update_lock.notify_all()
                     except Exception:
                         pass
@@ -338,18 +287,19 @@ def run_display_writer(command: list[Path | str], image_path: Path, preview_path
                 display_writer_last_status = DisplayWriterStatus.READY if \
                     exit_code == 0 else DisplayWriterStatus.FAILED
                 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
-                display_writer_image_info = image_info
-                update_display_writer_preview_locked(preview_path)
+                display_writer_image_info = info
+                update_preview_locked()
                 display_writer_update_lock.notify_all()
         except Exception:
             with display_writer_update_lock:
                 display_writer_last_status = DisplayWriterStatus.FAILED
                 display_writer_last_sub_status = DisplayWriterSubStatus.NONE
                 display_writer_image_info = None
-                update_display_writer_preview_locked(preview_path)
+                update_preview_locked()
                 display_writer_update_lock.notify_all()
             affiche_logger.exception('Failed to refresh display')
-            process.kill()
+            if process:
+                process.kill()
         finally:
             image_path.unlink(missing_ok=True)
 
@@ -437,38 +387,50 @@ def upload_file():
             pass
 
     info = {}
-    for name, type in [('path', str), ('collection', str)]:
+    if info_json := request.form.get('info', type=str):
         try:
-            value = request.form.get(f'info.{name}', type=type)
-            if value is not None:
-                info[name] = value
-        except ValueError:
+            info = json.loads(info_json)
+        except json.JSONDecodeError:
             pass
 
     display_writer_command: list[Path | str] = app.config['DISPLAY_WRITER_COMMAND']
-    preview_path: Path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
+    preview_path = app.config['PREVIEW_PATH'] / f'preview_{job_id}.png'
     if not run_display_writer(display_writer_command, file_path, preview_path, options, info):
         return redirect(request.url)
 
     return redirect(request.url)
 
+@app.route('/display_writer_options_schema.json')
+def display_writer_options_schema():
+    return app.config['DISPLAY_WRITER_OPTIONS_SCHEMA'], 200
+
+@app.route('/display_writer_options_defaults.json')
+def display_writer_options_defaults():
+    return {name: option.default for name, option in
+            app.config['DISPLAY_WRITER_OPTIONS'].items()}, 200
+
+def get_status_data(wait: bool = False):
+    with display_writer_update_lock:
+        if wait:
+            display_writer_update_lock.wait(2 * 60)
+
+        data = {
+            'status': display_writer_last_status.name,
+            'subStatus': display_writer_last_sub_status.name
+        }
+        data['preview'] = url_for('preview', file_name=display_writer_last_preview.name) if \
+                        display_writer_last_preview else None
+        data['imageInfo'] = display_writer_image_info if display_writer_image_info else None
+        return data
+
 @app.route('/status')
 def status():
-    def get_event_data(wait: bool = True):
-        with display_writer_update_lock:
-            if wait:
-                display_writer_update_lock.wait(2 * 60)
+    return get_status_data(), 200
 
-            data = {
-                'status': display_writer_last_status.name,
-                'subStatus': display_writer_last_sub_status.name
-            }
-
-            data['preview'] = url_for('preview', file_name=display_writer_last_preview.name) if \
-                              display_writer_last_preview else None
-            data['imageInfo'] = display_writer_image_info if display_writer_image_info else None
-
-            return f'data: {json.dumps(data)}\n\n'
+@app.route('/status/stream')
+def status_stream():
+    def get_event_data(wait: bool):
+        return f'data: {json.dumps(get_status_data(wait))}\n\n'
 
     @stream_with_context
     def event_generator():
@@ -476,7 +438,7 @@ def status():
 
         try:
             while True:
-                yield get_event_data()
+                yield get_event_data(True)
         except GeneratorExit:
             app.logger.debug('Client disconnected')
 
@@ -495,15 +457,6 @@ def preview(file_name: str):
             app.log_exception(exception)
 
         return '', 204
-
-@app.route('/display_writer_options_schema.json')
-def display_writer_options_schema():
-    return app.config['DISPLAY_WRITER_OPTIONS_SCHEMA'], 200
-
-@app.route('/display_writer_options_defaults.json')
-def display_writer_options_defaults():
-    return {name: option.default for name, option in
-            app.config['DISPLAY_WRITER_OPTIONS'].items()}, 200
 
 @app.route('/map_tiles')
 def map():

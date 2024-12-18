@@ -1,4 +1,5 @@
 import time
+from typing import Any
 
 import numpy
 import numpy.typing
@@ -7,12 +8,14 @@ from display_protocol import Display
 
 
 class Simulated:
-    def __init__(self):
-        self.buf = numpy.zeros((480, 800), numpy.uint8)
+    def __init__(self, config: dict[str, Any]):
+        size = (config.get('height', 480), config.get('width', 800))
+        self.buf = numpy.zeros(size, numpy.uint8)
+        self._show_delay: float = config.get('delay', 5)
 
     def show(self):
-        time.sleep(5)
+        time.sleep(self._show_delay)
 
 
-def init_display() -> Display:
-    return Simulated()
+def init_display(config: dict[str, Any]) -> Display:
+    return Simulated(config)

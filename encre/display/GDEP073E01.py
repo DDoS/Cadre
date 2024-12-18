@@ -214,5 +214,5 @@ class GDEP073E01:
         self._spi_write(GDEP073E01._SPI_DATA, data)
 
 
-def init_display() -> Display:
+def init_display(_) -> Display:
     return GDEP073E01()

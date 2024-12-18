@@ -181,4 +181,4 @@ class FileSystemCollection(Collection):
         if not absolute_path.exists():
             return None
 
-        return PhotoInfo(absolute_path.as_uri(), local_path, self.display_name)
+        return PhotoInfo(absolute_path.as_uri(), str(local_path), self.display_name)

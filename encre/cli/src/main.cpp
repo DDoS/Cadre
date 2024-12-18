@@ -68,7 +68,7 @@ int main(int arg_count, char** arg_values) {
         preview_image_path = (output_image_path.parent_path() / (output_image_path.stem() += "_preview.png"));
     }
 
-    auto palette = &encre::waveshare_gallery_palette_palette;
+    auto palette = &encre::eink_spectra_6_palette;
     if (const auto value = arguments.present("-l"))
         palette = &encre::palette_by_name.at(*value);
 

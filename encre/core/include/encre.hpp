@@ -99,17 +99,13 @@ namespace encre {
     // Using std::map to keep the name ordering consistent
     ENCRE_EXPORT extern const std::map<std::string, encre::Rotation> rotation_by_name;
 
-    // E-Ink Gallery "Palette" palette (Waveshare product)
-    // From data sheetsection 8-1: https://www.waveshare.com/7.3inch-e-paper-hat-f.htm
-    ENCRE_EXPORT extern const Palette waveshare_gallery_palette_palette;
-
-    // E-Ink Gallery "Palette" palette (Pimoroni product)
+    // E-Ink Gallery "Palette" palette
     // Measured as best I could from: https://shop.pimoroni.com/products/inky-impression-7-3
-    ENCRE_EXPORT extern const Palette pimoroni_gallery_palette_palette;
+    ENCRE_EXPORT extern const Palette eink_gallery_palette_palette;
 
-    // E-Ink Spectra 6 palette (Good Display product)
+    // E-Ink Spectra 6 palette
     // Measured as best I could from: https://buyepaper.com/products/gdep073e01
-    ENCRE_EXPORT extern const Palette GDEP073E01_spectra_6_palette;
+    ENCRE_EXPORT extern const Palette eink_spectra_6_palette;
 
     ENCRE_EXPORT extern const std::map<std::string, Palette> palette_by_name;
 

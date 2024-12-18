@@ -27,7 +27,7 @@ A [command line tool](encre/cli/src/main.cpp), and both a [C++](encre/core/inclu
 and a [Python API](encre/py/src/py_encre.cpp), are available.
 
 Samples results are available in [test_data](encre/test_data).
-They were generated for a 7.3" Pimoroni Inky Impression. Keep in mind that
+They were generated for a 7.3" Spectra 6 E-ink display. Keep in mind that
 current colour e-ink display technology has rather low gamut, so it's
 normal that the images look washed out. That's what it looks like on the
 actual display. This tool focuses on accurate colour mapping, it can't
@@ -54,21 +54,37 @@ will output `test_data/colors.bin` (palette'd image as raw unsigned bytes) and
 `test_data/colors_preview.png` as a preview. Run with `-h` for more information.
 
 If you have one of the displays listed [below](#supported-displays), you can use
-[write_to_display.py](encre/display/write_to_display.py) to directly write an image to the display.
+[write_to_display.py](#display-writer-script) to directly write an image to the display.
 Pass the display name as the first argument. Some displays have additional options which can be
 set using `--display-config <json>`.
 
 ### Supported displays
 
-- [Pimoroni Inky Impression](https://shop.pimoroni.com/products/inky-impression-7-3):
-    - Install [requirements-pimoroni_inky](affiche/requirements-pimoroni_inky.txt)
-    - Use name `pimoroni_inky`
+- [Pimoroni Inky Impression](https://github.com/pimoroni/inky?tab=readme-ov-file#inky-impression):
+    - Name: `pimoroni_inky`
+    - Install [requirements-pimoroni_inky](affiche/requirements-pimoroni_inky.txt).
+    - Follow the Raspberry Pi configuration instructions in the official repo
+    [README](https://github.com/pimoroni/inky?tab=readme-ov-file#install-stable-library-from-pypi-and-configure-manually).
+    - If you're using the 7.3" inch model, I recommend using the `AC073TC1` display below.
+    The Pimoroni library isn't great...
+- Generic E-Ink 7.3" Gallery Palette display (AC073TC1)
+    - Name: `AC073TC1`
+    - Install [requirements-spi](affiche/requirements-spi.txt).
+    - Enable SPI0 with CS0 (default).
+    - Compatible with the Inky Impression 7.3" and other similar displays.
+    - Check the [source file](encre/display/AC073TC1.py) for the pinout.
 - [Good Display E6 7.3" display (GDEP073E01)](https://buyepaper.com/products/gdep073e01)
-    - Install [requirements-GDEP073E01](affiche/requirements-GDEP073E01.txt).
-    - Use name  `GDEP073E01`
+    - Name: `GDEP073E01`
+    - Install [requirements-spi](affiche/requirements-spi.txt).
+    - Enable SPI0 with CS0 (default).
+    - Check the [source file](encre/display/GDEP073E01.py) for the pinout.
+- [Waveshare 13.3inch e-Paper (E)](https://www.waveshare.com/13.3inch-e-paper-hat-plus-e.htm?sku=29353)
+    - Name: `EL133UF1`
+    - Install [requirements-spi](affiche/requirements-spi.txt).
+    - Enable SPI0 but disable CS0 and CS1 (in `/boot/firmware/config.txt` add `dtoverlay=spi0-0cs`).
+    - Check the [source file](encre/display/EL133UF1.py) for the pinout.
 - Proxy
-    - Use name `proxy`
-    - No additional requirements
+    - Name: `proxy`
     - Options:
         - `width`, `height`: display width and height
         - `url`: URL to post the image to
@@ -77,8 +93,7 @@ set using `--display-config <json>`.
     Useful for converting an image locally on a more capable computer before posting it to an Affiche instance
     running on a less capable device. See [proxying](#proxying) for an example.
 - Simulated
-    - Use name `simulated`
-    - No additional requirements
+    - Name: `simulated`
     - Options:
         - `width`, `height`: display width and height
         - `delay`: display simulated update time in seconds
@@ -429,7 +444,7 @@ Use the Encre `proxy` display to convert locally and post the result to an Affic
         "../encre/display/write_to_display.py",
         "proxy",
         "--display-config", "{\"url\": \"http://%HOSTNAME%\", \"height\": 480, \"width\": 800}",
-        "--palette", "pimoroni_gallery_palette"
+        "--palette", "eink_spectra_6"
     ]
 }
 ```

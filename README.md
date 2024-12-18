@@ -27,7 +27,7 @@ A [command line tool](encre/cli/src/main.cpp), and both a [C++](encre/core/inclu
 and a [Python API](encre/py/src/py_encre.cpp), are available.
 
 Samples results are available in [test_data](encre/test_data).
-They were generated for a 7.3" Pimoroni Inky Impression. Keep in mind that
+They were generated for a 7.3" Spectra 6 E-ink display. Keep in mind that
 current colour e-ink display technology has rather low gamut, so it's
 normal that the images look washed out. That's what it looks like on the
 actual display. This tool focuses on accurate colour mapping, it can't

@@ -21,7 +21,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description='Write an image to a display')
     parser.add_argument('display', metavar='name', type=str, help='Name of the display',
-                        choices={'simulated', 'proxy', 'pimoroni_inky', 'GDEP073E01', 'microfiche'})
+                        choices={'simulated', 'proxy', 'pimoroni_inky', 'AC073TC1',
+                                 'GDEP073E01', 'EL133UF1', 'microfiche'})
     parser.add_argument('--display-config', metavar='json', type=str, required=False, default=None,
                         help='Display config as a JSON encoded string')
     parser.add_argument('image_path', metavar='path', type=Path, help='Image to write')

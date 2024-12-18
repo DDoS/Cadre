@@ -110,6 +110,7 @@ body {
 .affiche-options-foldout {
     display: flex;
     margin: 0 12px 0 12px;
+    min-width: 300px;
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.1s ease-in-out;

@@ -16,19 +16,7 @@
 #endif
 
 namespace encre {
-    const Palette waveshare_gallery_palette_palette = make_palette(
-        std::to_array<CIELab>({
-            {17.6f, 8.3f, -8.9f}, // Black
-            {70.6f, -0.4f, 2.4f}, // White
-            {38.3f, -26.0f, 13.4f}, // Green
-            {28.0f, 9.2f, -25.0f}, // Blue
-            {37.6f, 35.9f, 17.4f}, // Red
-            {65.5f, -6.7f, 46.4f}, // Yellow
-            {44.4f, 24.9f, 30.0f}, // Orange "a" and "b" were swapped?
-        })
-    );
-
-    const Palette pimoroni_gallery_palette_palette = make_palette(
+    const Palette eink_gallery_palette_palette = make_palette(
         std::to_array<CIELab>({
             {15.45f, 5.08f, -8.48f}, // Black
             {73.65f, -1.01f, 2.65f}, // White
@@ -40,7 +28,7 @@ namespace encre {
         })
     );
 
-    const Palette GDEP073E01_spectra_6_palette = make_palette(
+    const Palette eink_spectra_6_palette = make_palette(
         std::to_array<CIELab>({
             {21.60f, 4.86f, -8.00f}, // Black
             {90.25f, -0.99f, 2.05f}, // White
@@ -53,9 +41,8 @@ namespace encre {
 
     // Using std::map to keep the name ordering consistent
     const std::map<std::string, Palette> palette_by_name{
-        {"waveshare_gallery_palette", waveshare_gallery_palette_palette},
-        {"pimoroni_gallery_palette", pimoroni_gallery_palette_palette},
-        {"GDEP073E01_spectra_6", GDEP073E01_spectra_6_palette},
+        {"eink_gallery_palette", eink_gallery_palette_palette},
+        {"eink_spectra_6", eink_spectra_6_palette},
     };
 
     Palette make_palette(std::span<const CIEXYZ> colors, float target_lightness) {

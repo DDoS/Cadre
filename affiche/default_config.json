@@ -3,7 +3,7 @@
     "DISPLAY_WRITER_COMMAND": [
         "../encre/display/write_to_display.py",
         "simulated",
-        "--palette", "waveshare_gallery_palette",
+        "--palette", "eink_spectra_6",
         "--status"
     ],
     "DISPLAY_WRITER_OPTIONS_SCHEMA_PATH": "../encre/encre_options.json",

@@ -7,13 +7,17 @@ Increase size of swap if you have less than 2GB:
 Install:
     git git-lfs g++ cmake ninja-build libvips-dev python3-dev
 
+Building on a lower power Raspberry Pi, like a Zero 2, can be very slow.
+Consider using distcc to accelerate the build: see distcc_notes.txt.
+Otherwise be patient!
+
 The package manager libvips should be good enough for most use cases.
 But if you want raw image support, you'll need to build it and ImageMagick
 from scratch; don't install "libvips-dev" and see "libvips_build_notes.txt".
 
 Add vcpkg environment variables to ~/.profile:
     export VCPKG_FORCE_SYSTEM_BINARIES=1 # Required
-    export VCPKG_MAX_CONCURRENCY=2 # For Zero 2
+    export VCPKG_MAX_CONCURRENCY=2 # For Zero 2 if not using distcc
 
 Reload profile:
     run: . ~/.profile

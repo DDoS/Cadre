@@ -1,0 +1,33 @@
+Building on a lower power Raspberry Pi, like a Zero 2, can be very slow.
+One solution is to use distcc to offload the compilation to another faster device.
+
+First setup distcc on the device that will do the building. It should be on your
+local network, and capable of compiling either natively or "cross" to aarch64-linux-gnu,
+with the same compiler version your build target.
+Install distcc from the package manager, then edit /etc/default/distcc:
+    STARTDISTCC="true"
+    ALLOWEDNETS="10.0.0.0/8 192.168.0.0/16 172.16.0.0/12 127.0.0.0/8"
+    LISTENER="0.0.0.0"
+Enable the service: systemctl enable distcc && systemctl start distcc
+
+On the target device, also install distcc, then in ~/.distcc/hosts add a single
+line with the build device hostname (for example: "laptop.local"). You can setup
+multiple build devices by repeating the previous instructions on other devices;
+in that case add one hostname per line.
+
+When building, you need to explicitly select distcc.
+    Make: make -j<job count> CC="distcc gcc" CXX="distcc g++"
+    Meson: CC="distcc gcc" CXX="distcc g++" meson setup ...
+    CMake: export CMAKE_C_COMPILER_LAUNCHER=distcc CMAKE_CXX_COMPILER_LAUNCHER=distcc
+
+For Make you also need to pass a job count that matches the number of processor
+for your distributed build (example: a Pi Zero 2 with a Pi 5 is about 6 jobs).
+
+You can add the CMake environment variables to your ~/.profile so you don't have to
+remember next time.
+
+If you're doing cross-compilation, then you will need to use the fully qualified
+compiler names: aarch64-linux-gnu-gcc and aarch64-linux-gnu-g++.
+
+If everything is going well, htop should show distcc build tasks on the build device
+when you run on a build on your target device.

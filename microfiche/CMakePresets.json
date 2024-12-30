@@ -1,0 +1,92 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 23,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "PICO_BOARD": "pico2_w"
+            }
+        },
+        {
+            "inherits": "base",
+            "name": "debug",
+            "displayName": "Debug",
+            "description": "Default debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "PICO_DEOPTIMIZED_DEBUG": "1"
+            }
+        },
+        {
+            "inherits": "base",
+            "name": "release",
+            "displayName": "Release",
+            "description": "Default release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "verbose": false
+        },
+        {
+            "inherits": "base",
+            "name": "debug",
+            "configurePreset": "debug",
+            "displayName": "Debug",
+            "description": "Default debug"
+        },
+        {
+            "inherits": "base",
+            "name": "release",
+            "configurePreset": "release",
+            "displayName": "Release",
+            "description": "Default release"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "description": "Default debug",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "debug"
+                },
+                {
+                    "type": "build",
+                    "name": "base"
+                }
+            ]
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "description": "Default release",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "release"
+                },
+                {
+                    "type": "build",
+                    "name": "base"
+                }
+            ]
+        }
+    ]
+}

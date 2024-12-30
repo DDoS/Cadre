@@ -1,0 +1,11 @@
+- server:
+  - static:
+      file: index.html
+  - custom:
+      path: /
+      methods:
+      - OPTIONS
+  - custom:
+      path: /image
+      methods:
+      - POST

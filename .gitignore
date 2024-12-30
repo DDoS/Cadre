@@ -4,6 +4,7 @@ build/
 __pycache__/
 temp/
 *_temp/
+worktree-*/
 
 *.log
 *.log.[0-9]

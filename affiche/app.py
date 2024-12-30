@@ -339,7 +339,7 @@ app.json.sort_keys = False
 app.json.include_nulls = True
 CORS(app, origins=[
     'http://localhost',
-    re.compile(r'^http://.*\.local'),
+    re.compile(r'^http://.+\.local'),
     'https://microfiche.sapon.ca'
 ], allow_private_network=True)
 setup_app_config(app)

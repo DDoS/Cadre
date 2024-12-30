@@ -1,3 +1,6 @@
+# Modified from:
+# https://github.com/pimoroni/inky/blob/main/library/inky/inky_ac073tc1a.py
+
 import time
 import warnings
 import numpy
@@ -9,18 +12,18 @@ import spidev
 from display_protocol import Display
 
 
-class GDEP073E01:
+class AC073TC1:
     DC_PIN = 22
     RESET_PIN = 27
     BUSY_PIN = 17
 
     BLACK = 0
     WHITE = 1
-    YELLOW = 2
-    RED = 3
-    # Actually 4 is unused
-    BLUE = 4 # Actually 5
-    GREEN = 5 # Actually 6
+    GREEN = 2
+    BLUE = 3
+    RED = 4
+    YELLOW = 5
+    ORANGE = 6
 
     WIDTH = 800
     HEIGHT = 480
@@ -35,13 +38,23 @@ class GDEP073E01:
     _DSLP = 0x07
     _BTST3 = 0x08
     _DTM = 0x10
+    _DSP = 0x11
     _DRF = 0x12
     _IPC = 0x13
     _PLL = 0x30
+    _TSC = 0x40
     _TSE = 0x41
+    _TSW = 0x42
+    _TSR = 0x43
     _CDI = 0x50
+    _LPD = 0x51
     _TCON = 0x60
     _TRES = 0x61
+    _DAM = 0x65
+    _REV = 0x70
+    _FLG = 0x71
+    _AMV = 0x80
+    _VV = 0x81
     _VDCS = 0x82
     _T_VDCS = 0x84
     _AGID = 0x86
@@ -65,7 +78,7 @@ class GDEP073E01:
         self._gpio = None
         self._spi_bus = None
 
-        self.buf = numpy.zeros((GDEP073E01.HEIGHT, GDEP073E01.WIDTH), dtype=numpy.uint8)
+        self.buf = numpy.zeros((AC073TC1.HEIGHT, AC073TC1.WIDTH), dtype=numpy.uint8)
 
         self.spi_bus = spi_bus
         self.dc_pin = dc_pin
@@ -78,9 +91,8 @@ class GDEP073E01:
         """
         buf = self.buf.flatten()
 
-        # Remove invalid colors, correct for unused index 4
-        buf = numpy.clip(buf, 0, 5)
-        buf[buf >= 4] += 1
+        # Remove invalid colors
+        buf = numpy.clip(buf, 0, 6)
 
         buf = ((buf[::2] << 4) & 0xF0) | (buf[1::2] & 0x0F)
 
@@ -114,25 +126,25 @@ class GDEP073E01:
         self._busy_wait(1.0)
 
         # Sending init commands to display
-        self._send_command(GDEP073E01._CMDH, [0x49, 0x55, 0x20, 0x08, 0x09, 0x18])
-        self._send_command(GDEP073E01._PWR, [0x3F, 0x00, 0x32, 0x2A, 0x0E, 0x2A])
-        self._send_command(GDEP073E01._PSR, [0x5F, 0x69])
-        self._send_command(GDEP073E01._POFS, [0x00, 0x54, 0x00, 0x44])
-        self._send_command(GDEP073E01._BTST1, [0x40, 0x1F, 0x1F, 0x2C])
-        self._send_command(GDEP073E01._BTST2, [0x6F, 0x1F, 0x16, 0x25])
-        self._send_command(GDEP073E01._BTST3, [0x6F, 0x1F, 0x1F, 0x22])
-        self._send_command(GDEP073E01._IPC, [0x00, 0x04])
-        self._send_command(GDEP073E01._PLL, 0x02)
-        self._send_command(GDEP073E01._TSE, 0x00)
-        self._send_command(GDEP073E01._CDI, 0x3F)
-        self._send_command(GDEP073E01._TCON, [0x02, 0x00])
-        self._send_command(GDEP073E01._TRES, [0x03, 0x20, 0x01, 0xE0])
-        self._send_command(GDEP073E01._VDCS, 0x1E)
-        self._send_command(GDEP073E01._T_VDCS, 0x01)
-        self._send_command(GDEP073E01._AGID, 0x00)
-        self._send_command(GDEP073E01._PWS, 0x2F)
-        self._send_command(GDEP073E01._CCSET, 0x00)
-        self._send_command(GDEP073E01._TSSET, 0x00)
+        self._send_command(AC073TC1._CMDH, [0x49, 0x55, 0x20, 0x08, 0x09, 0x18])
+        self._send_command(AC073TC1._PWR, [0x3F, 0x00, 0x32, 0x2A, 0x0E, 0x2A])
+        self._send_command(AC073TC1._PSR, [0x5F, 0x69])
+        self._send_command(AC073TC1._POFS, [0x00, 0x54, 0x00, 0x44])
+        self._send_command(AC073TC1._BTST1, [0x40, 0x1F, 0x1F, 0x2C])
+        self._send_command(AC073TC1._BTST2, [0x6F, 0x1F, 0x16, 0x25])
+        self._send_command(AC073TC1._BTST3, [0x6F, 0x1F, 0x1F, 0x22])
+        self._send_command(AC073TC1._IPC, [0x00, 0x04])
+        self._send_command(AC073TC1._PLL, 0x02)
+        self._send_command(AC073TC1._TSE, 0x00)
+        self._send_command(AC073TC1._CDI, 0x3F)
+        self._send_command(AC073TC1._TCON, [0x02, 0x00])
+        self._send_command(AC073TC1._TRES, [0x03, 0x20, 0x01, 0xE0])
+        self._send_command(AC073TC1._VDCS, 0x1E)
+        self._send_command(AC073TC1._T_VDCS, 0x00)
+        self._send_command(AC073TC1._AGID, 0x00)
+        self._send_command(AC073TC1._PWS, 0x2F)
+        self._send_command(AC073TC1._CCSET, 0x00)
+        self._send_command(AC073TC1._TSSET, 0x00)
 
     def _busy_wait(self, timeout):
         if self._gpio.input(self.busy_pin):
@@ -150,15 +162,15 @@ class GDEP073E01:
     def _update(self, buf):
         self._setup()
 
-        self._send_command(GDEP073E01._DTM, buf)
+        self._send_command(AC073TC1._DTM, buf)
 
-        self._send_command(GDEP073E01._PON)
+        self._send_command(AC073TC1._PON)
         self._busy_wait(0.4)
 
-        self._send_command(GDEP073E01._DRF, 0x00)
+        self._send_command(AC073TC1._DRF, 0x00)
         self._busy_wait(45.0)
 
-        self._send_command(GDEP073E01._POF, 0x00)
+        self._send_command(AC073TC1._POF, 0x00)
         self._busy_wait(0.4)
 
         self._sleep()
@@ -168,7 +180,7 @@ class GDEP073E01:
         self._spi_bus.writebytes2(data)
 
     def _send_command(self, command, data=None):
-        self._spi_write(GDEP073E01._SPI_COMMAND, [command])
+        self._spi_write(AC073TC1._SPI_COMMAND, [command])
         if data is not None:
             self._send_data(data)
 
@@ -177,11 +189,11 @@ class GDEP073E01:
             _ = iter(data)
         except TypeError:
             data = [data]
-        self._spi_write(GDEP073E01._SPI_DATA, data)
+        self._spi_write(AC073TC1._SPI_DATA, data)
 
     def _sleep(self):
-        self._send_command(GDEP073E01._DSLP, 0xA5)
+        self._send_command(AC073TC1._DSLP, 0xA5)
 
 
 def init_display(_) -> Display:
-    return GDEP073E01()
+    return AC073TC1()

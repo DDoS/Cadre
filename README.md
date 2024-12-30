@@ -223,6 +223,18 @@ you have environment variables required by Affiche (or Expo) in your bash profil
 Try disabling Wifi power management using `iwconfig wlan0 power off`. You can make this change
 persistent on reboot by adding `/sbin/iwconfig wlan0 power off` to `/etc/rc.local`.
 
+#### Your Raspberry Pi stops responding to all connections until power cycled
+
+On a lower power Raspberry Pi, like a Zero 2, it's possible that if an automatic `apt` update runs
+at the same time as a large photo is being processed, the system will crash. Consider disabling the
+automatic `apt` updates:
+```sh
+sudo systemctl mask apt-daily-upgrade
+sudo systemctl mask apt-daily
+sudo systemctl disable apt-daily-upgrade.timer
+sudo systemctl disable apt-daily.timer
+```
+
 #### The Expo link is wrong
 
 More specifically, your local address is `cadre.local`, and clicking the Expo link opens `cadre`,

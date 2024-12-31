@@ -88,7 +88,7 @@ class EL133UF1:
         Show buffer on display.
         """
         def flatten_buf(buf: numpy.typing.NDArray[numpy.uint8]):
-            buf = buf.T.flatten()
+            buf = numpy.fliplr(buf.T).flatten()
 
             # Remove invalid colors, correct for unused index 4
             buf = numpy.clip(buf, 0, 5)
@@ -96,7 +96,7 @@ class EL133UF1:
 
             return ((buf[::2] << 4) & 0xF0) | (buf[1::2] & 0x0F)
 
-        primary_buf, secondary_buf = numpy.vsplit(self.buf, 2)
+        secondary_buf, primary_buf = numpy.vsplit(self.buf, 2)
         self._update(flatten_buf(primary_buf), flatten_buf(secondary_buf))
 
     def _setup(self):

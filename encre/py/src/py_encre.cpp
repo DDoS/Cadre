@@ -21,7 +21,7 @@ namespace {
 
     template<typename T, typename S = T>
     const auto read_option(const py::object& object, const char* name, T& storage) {
-        if (const auto value = try_get<float>(object, name))
+        if (const auto value = try_get<S>(object, name))
             storage = *value;
     }
 
@@ -59,17 +59,17 @@ PYBIND11_MODULE(py_encre, m) {
         def_readwrite("c", &encre::Plane::z).
         def_readwrite("d", &encre::Plane::w);
 
-    py::class_<encre::Line>(m, "Line").
+    py::class_<encre::Range>(m, "Line").
         def(py::init<float, float>()).
-        def_readwrite("a", &encre::Line::x).
-        def_readwrite("b", &encre::Line::y);
+        def_readwrite("a", &encre::Range::x).
+        def_readwrite("b", &encre::Range::y);
 
     py::class_<encre::Palette>(m, "Palette").
         def_readonly_static("default_target_lightness", &encre::Palette::default_target_lightness).
         def_readwrite("points", &encre::Palette::points).
         def_readwrite("gamut_vertices", &encre::Palette::gamut_vertices).
         def_readwrite("gamut_planes", &encre::Palette::gamut_planes).
-        def_readwrite("gray_line", &encre::Palette::gray_line).
+        def_readwrite("gray_line", &encre::Palette::gray_range).
         def_readwrite("lightness_range", &encre::Palette::lightness_range).
         def_readwrite("max_chroma", &encre::Palette::max_chroma);
 
@@ -92,6 +92,7 @@ PYBIND11_MODULE(py_encre, m) {
             read_option(arguments, "brightness", options.brightness);
             read_option(arguments, "contrast", options.contrast);
             read_option(arguments, "sharpening", options.sharpening);
+            read_option(arguments, "hue_dependent_chroma_clamping", options.hue_dependent_chroma_clamping);
             read_option(arguments, "clipped_chroma_recovery", options.clipped_chroma_recovery);
             read_option(arguments, "error_attenuation", options.error_attenuation);
             return options;
@@ -104,6 +105,7 @@ PYBIND11_MODULE(py_encre, m) {
         def_readonly_static("no_brightness_change", &encre::Options::no_brightness_change).
         def_readonly_static("default_contrast", &encre::Options::default_contrast).
         def_readonly_static("default_sharpening", &encre::Options::default_sharpening).
+        def_readonly_static("default_hue_dependent_chroma_clamping", &encre::Options::default_hue_dependent_chroma_clamping).
         def_readonly_static("default_clipped_chroma_recovery", &encre::Options::default_clipped_chroma_recovery).
         def_readonly_static("default_error_attenuation", &encre::Options::default_error_attenuation).
         def_readwrite("rotation", &encre::Options::rotation).
@@ -112,6 +114,7 @@ PYBIND11_MODULE(py_encre, m) {
         def_readwrite("brightness", &encre::Options::brightness).
         def_readwrite("contrast", &encre::Options::contrast).
         def_readwrite("sharpening", &encre::Options::sharpening).
+        def_readwrite("hue_dependent_chroma_clamping", &encre::Options::hue_dependent_chroma_clamping).
         def_readwrite("clipped_chroma_recovery", &encre::Options::clipped_chroma_recovery).
         def_readwrite("error_attenuation", &encre::Options::error_attenuation);
 

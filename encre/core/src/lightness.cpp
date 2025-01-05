@@ -94,7 +94,7 @@ namespace encre {
             const std::optional<float>& exposure, const std::optional<float>& brightness, float contrast) {
         auto lightness = in.extract_band(0);
 
-        const auto target_min_max = glm::mix(glm::vec2{-100.f, 200.f}, palette.gray_line, dynamic_range);
+        const auto target_min_max = glm::mix(glm::vec2{-100.f, 200.f}, palette.gray_range, dynamic_range);
 
         lightness = apply_exposure_and_brightness(lightness, target_min_max, exposure, brightness);
         lightness = tone_map(lightness, target_min_max, contrast);

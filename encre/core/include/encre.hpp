@@ -51,7 +51,11 @@ namespace encre {
         using glm::vec4::vec4;
     };
 
-    struct Line : glm::vec2 {
+    struct Edge : glm::mat2x3 {
+        using glm::mat2x3::mat2x3;
+    };
+
+    struct Range : glm::vec2 {
         using glm::vec2::vec2;
     };
 
@@ -60,8 +64,9 @@ namespace encre {
 
         std::vector<Oklab> points;
         std::vector<Oklab> gamut_vertices;
+        std::vector<Edge> gamut_edges;
         std::vector<Plane> gamut_planes;
-        Line gray_line{};
+        Range gray_range{};
         float lightness_range{};
         float max_chroma{};
     };
@@ -76,14 +81,15 @@ namespace encre {
 
     struct Options {
         static constexpr Rotation default_rotation = Rotation::automatic;
-        static constexpr float default_dynamic_range = 0.95f;
+        static constexpr float default_dynamic_range = 0.85f;
         static constexpr float default_contrast = 0.6f;
         static constexpr std::nullopt_t automatic_exposure = std::nullopt;
         static constexpr std::nullopt_t automatic_brightness = std::nullopt;
         static constexpr float no_exposure_change = 1;
         static constexpr float no_brightness_change = 0;
-        static constexpr float default_sharpening = 4;
-        static constexpr float default_clipped_chroma_recovery = 1.f;
+        static constexpr float default_sharpening = 3;
+        static constexpr bool default_hue_dependent_chroma_clamping = true;
+        static constexpr float default_clipped_chroma_recovery = 10;
         static constexpr float default_error_attenuation = 0.1f;
 
         Rotation rotation = default_rotation;
@@ -92,6 +98,7 @@ namespace encre {
         std::optional<float> brightness = automatic_brightness;
         float contrast = default_contrast;
         float sharpening = default_sharpening;
+        bool hue_dependent_chroma_clamping = default_hue_dependent_chroma_clamping;
         float clipped_chroma_recovery = default_clipped_chroma_recovery;
         float error_attenuation = default_error_attenuation;
     };

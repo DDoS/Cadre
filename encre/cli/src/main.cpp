@@ -43,6 +43,8 @@ int main(int arg_count, char** arg_values) {
             default_value(encre::Options::default_contrast);
     arguments.add_argument("-s", "--sharpening").scan<'g', float>().metavar("factor").help("sharpening").
             default_value(encre::Options::default_sharpening);
+    arguments.add_argument("-t", "--gray-chroma-tolerance").scan<'g', float>().metavar("factor").help("gray chroma tolerance").
+            default_value(encre::Options::default_gray_chroma_tolerance);
     arguments.add_argument("-d", "--hue-dependent-chroma-clamping").scan<'u', uint32_t>().help("hue dependent chroma clamping").
             default_value(uint32_t{encre::Options::default_hue_dependent_chroma_clamping});
     arguments.add_argument("-g", "--clipped-chroma-recovery").scan<'g', float>().metavar("factor").help("clipped chroma recovery").
@@ -94,6 +96,7 @@ int main(int arg_count, char** arg_values) {
     read_option(arguments, "-b", options.brightness);
     read_option(arguments, "-c", options.contrast);
     read_option(arguments, "-s", options.sharpening);
+    read_option(arguments, "-t", options.gray_chroma_tolerance);
     read_option<bool, uint32_t>(arguments, "-d", options.hue_dependent_chroma_clamping);
     read_option(arguments, "-g", options.clipped_chroma_recovery);
     read_option(arguments, "-a", options.error_attenuation);

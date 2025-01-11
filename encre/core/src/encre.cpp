@@ -7,7 +7,6 @@
 #include <vips/vips8>
 
 #include <iostream>
-#include <cstdlib>
 
 namespace {
     const std::vector<double> oklab_black{0, 0, 0};
@@ -119,8 +118,8 @@ namespace encre {
             image = image.gravity(VipsCompassDirection::VIPS_COMPASS_DIRECTION_CENTRE, width, height,
                 vips::VImage::option()->set("extend", VipsExtend::VIPS_EXTEND_BACKGROUND)->set("background", fill_color));
 
-            dither(image, palette, options.hue_dependent_chroma_clamping, options.clipped_chroma_recovery,
-                    options.error_attenuation, output);
+            dither(image, palette, options.gray_chroma_tolerance, options.hue_dependent_chroma_clamping,
+                    options.clipped_chroma_recovery, options.error_attenuation, output);
         } catch (const std::exception& error) {
             std::cerr << "Error: \"" << error.what() << "\"" << std::endl;
             return false;

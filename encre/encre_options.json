@@ -36,6 +36,11 @@
         "type": "number",
         "placeholder": "ex: 3"
     },
+    "gray_chroma_tolerance": {
+        "display_name": "Gray chroma tolerance",
+        "type": "number",
+        "placeholder": "ex: 2.5"
+    },
     "hue_dependent_chroma_clamping": {
         "display_name": "Hue dependent chroma clamping",
         "type": "boolean",

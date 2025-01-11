@@ -88,6 +88,7 @@ namespace encre {
         static constexpr float no_exposure_change = 1;
         static constexpr float no_brightness_change = 0;
         static constexpr float default_sharpening = 3;
+        static constexpr float default_gray_chroma_tolerance = 2.5f;
         static constexpr bool default_hue_dependent_chroma_clamping = true;
         static constexpr float default_clipped_chroma_recovery = 10;
         static constexpr float default_error_attenuation = 0.1f;
@@ -98,6 +99,7 @@ namespace encre {
         std::optional<float> brightness = automatic_brightness;
         float contrast = default_contrast;
         float sharpening = default_sharpening;
+        float gray_chroma_tolerance = default_gray_chroma_tolerance;
         bool hue_dependent_chroma_clamping = default_hue_dependent_chroma_clamping;
         float clipped_chroma_recovery = default_clipped_chroma_recovery;
         float error_attenuation = default_error_attenuation;
@@ -106,13 +108,25 @@ namespace encre {
     // Using std::map to keep the name ordering consistent
     ENCRE_EXPORT extern const std::map<std::string, encre::Rotation> rotation_by_name;
 
-    // E-Ink Gallery "Palette" palette
-    // Measured as best I could from: https://shop.pimoroni.com/products/inky-impression-7-3
+    // E-Ink Gallery "Palette" palette, measured as best I could from:
+    // https://shop.pimoroni.com/products/inky-impression-7-3.
+    // The chroma from the black and white colours was removed to
+    // provide better contrast, at the cost of a bit of grayscale accuracy.
     ENCRE_EXPORT extern const Palette eink_gallery_palette_palette;
 
-    // E-Ink Spectra 6 palette
-    // Measured as best I could from: https://buyepaper.com/products/gdep073e01
+    // A strictly accurate version of eink_gallery_palette_palette with correct
+    // blacks and whites, but with less contrast.
+    ENCRE_EXPORT extern const Palette eink_gallery_palette_accurate_palette;
+
+    // E-Ink Spectra 6 palette, measured as best I could from:
+    // https://buyepaper.com/products/gdep073e01.
+    // The chroma from the black and white colours was removed to
+    // provide better contrast, at the cost of a bit of grayscale accuracy.
     ENCRE_EXPORT extern const Palette eink_spectra_6_palette;
+
+    // A strictly accurate version of eink_spectra_6_palette with correct
+    // blacks and whites, but with less contrast.
+    ENCRE_EXPORT extern const Palette eink_spectra_6_accurate_palette;
 
     ENCRE_EXPORT extern const std::map<std::string, Palette> palette_by_name;
 

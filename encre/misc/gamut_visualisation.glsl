@@ -55,35 +55,45 @@ bool inside_srgb_gamut(vec3 c) {
     return all(greaterThan(c, vec3(0.0))) && all(lessThan(c, vec3(1.0)));
 }
 
+const int palette_vertex_count = 6;
+const vec3[palette_vertex_count] palette_vertices = vec3[palette_vertex_count](
+    vec3(49.9074, -6.67006, 5.35445) / 100.0,
+    vec3(75.5561, -1.7477, 16.2378) / 100.0,
+    vec3(80, -0.23354, 0.533135) / 100.0,
+    vec3(46.5118, -2.62564, -15.3395) / 100.0,
+    vec3(28.4822, 1.08724, -2.17702) / 100.0,
+    vec3(42.0149, 12.5315, 6.71763) / 100.0
+);
 const int palette_edge_count = 12;
 const mat2x3[palette_edge_count] palette_edges = mat2x3[palette_edge_count](
-    mat2x3(vec3(42.0149, 12.5315, 6.71763), vec3(80, -0.23354, 0.533135)),
-    mat2x3(vec3(75.5561, -1.7477, 16.2378), vec3(80, -0.23354, 0.533135)),
-    mat2x3(vec3(75.5561, -1.7477, 16.2378), vec3(42.0149, 12.5315, 6.71763)),
-    mat2x3(vec3(42.0149, 12.5315, 6.71763), vec3(28.4822, 1.08724, -2.17702)),
-    mat2x3(vec3(46.5118, -2.62564, -15.3395), vec3(28.4822, 1.08724, -2.17702)),
-    mat2x3(vec3(46.5118, -2.62564, -15.3395), vec3(42.0149, 12.5315, 6.71763)),
-    mat2x3(vec3(46.5118, -2.62564, -15.3395), vec3(80, -0.23354, 0.533135)),
-    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(80, -0.23354, 0.533135)),
-    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(75.5561, -1.7477, 16.2378)),
-    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(46.5118, -2.62564, -15.3395)),
-    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(28.4822, 1.08724, -2.17702)),
-    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(42.0149, 12.5315, 6.71763))
+    mat2x3(vec3(42.0149, 12.5315, 6.71763), vec3(80, -0.23354, 0.533135)) / 100.0,
+    mat2x3(vec3(75.5561, -1.7477, 16.2378), vec3(80, -0.23354, 0.533135)) / 100.0,
+    mat2x3(vec3(75.5561, -1.7477, 16.2378), vec3(42.0149, 12.5315, 6.71763)) / 100.0,
+    mat2x3(vec3(42.0149, 12.5315, 6.71763), vec3(28.4822, 1.08724, -2.17702)) / 100.0,
+    mat2x3(vec3(46.5118, -2.62564, -15.3395), vec3(28.4822, 1.08724, -2.17702)) / 100.0,
+    mat2x3(vec3(46.5118, -2.62564, -15.3395), vec3(42.0149, 12.5315, 6.71763)) / 100.0,
+    mat2x3(vec3(46.5118, -2.62564, -15.3395), vec3(80, -0.23354, 0.533135)) / 100.0,
+    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(80, -0.23354, 0.533135)) / 100.0,
+    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(75.5561, -1.7477, 16.2378)) / 100.0,
+    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(46.5118, -2.62564, -15.3395)) / 100.0,
+    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(28.4822, 1.08724, -2.17702)) / 100.0,
+    mat2x3(vec3(49.9074, -6.67006, 5.35445), vec3(42.0149, 12.5315, 6.71763)) / 100.0
 );
 const int palette_facet_count = 8;
 const vec4[palette_facet_count] palette_facets = vec4[palette_facet_count](
-    vec4(0.339991, 0.922032, 0.185104, -0.270826),
-    vec4(-0.266854, 0.768024, -0.582175, 0.0549817),
-    vec4(0.191684, 0.826688, -0.529003, -0.148596),
-    vec4(0.203379, -0.978409, -0.0367826, -0.164792),
-    vec4(0.171019, -0.961313, -0.21594, -0.137909),
-    vec4(-0.294465, -0.945858, -0.136542, 0.0911815),
-    vec4(-0.394742, -0.225484, 0.890694, 0.134273),
-    vec4(-0.347991, -0.207933, 0.914148, 0.110856)
+    vec4(0.339991, 0.922032, 0.185104, -27.0826 / 100.0),
+    vec4(-0.266854, 0.768024, -0.582175, 5.49817 / 100.0),
+    vec4(0.191684, 0.826688, -0.529003, -14.8596 / 100.0),
+    vec4(0.203379, -0.978409, -0.0367826, -16.4792 / 100.0),
+    vec4(0.171019, -0.961313, -0.21594, -13.7909 / 100.0),
+    vec4(-0.294465, -0.945858, -0.136542, 9.11815 / 100.0),
+    vec4(-0.394742, -0.225484, 0.890694, 13.4273 / 100.0),
+    vec4(-0.347991, -0.207933, 0.914148, 11.0856 / 100.0)
 );
-const vec2 gray_range = vec2(0.340155, 0.775215);
+const vec2 gray_range = vec2(34.0155, 77.5215) / 100.0;
 
 const float lightness_adaptation_factor = 1.0;
+const float gray_chroma_tolerance = 0.025;
 
 bool lab_inside_palette_gamut(vec3 lab) {
     for (int i = 0; i < palette_facet_count; i++) {
@@ -94,14 +104,15 @@ bool lab_inside_palette_gamut(vec3 lab) {
     return true;
 }
 
-vec3 find_peak_chroma(vec3 lab) {
+mat3 find_hue_extrema(vec3 lab) {
     vec3 hue_normal = normalize(vec3(0, -lab.z, lab.y));
 
-    float peak_chroma = 0.0;
-    vec3 lab_at_peak_chroma = vec3(0);
+    mat3x2 lc_at_extrema = mat3x2(vec2(0, 0), vec2(1e10, 0), vec2(0, 0));
+    mat3 lab_at_extrema = mat3(vec3(mix(gray_range.x, gray_range.y, 0.5), 0, 0), vec3(0), vec3(0));
+
     for (int i = 0; i < palette_edge_count; i++) {
-        vec3 edge_start = palette_edges[i][0] / 100.0;
-        vec3 edge_delta = palette_edges[i][1] / 100.0 - edge_start;
+        vec3 edge_start = palette_edges[i][0];
+        vec3 edge_delta = palette_edges[i][1] - edge_start;
         float edge_length = length(edge_delta);
         vec3 edge_direction = edge_delta / edge_length;
         float d = dot(edge_direction, hue_normal);
@@ -115,64 +126,83 @@ vec3 find_peak_chroma(vec3 lab) {
         }
 
         vec3 intersection = edge_start + t * edge_direction;
-        if (dot(lab.yz, intersection.yz) < -1e-4) {
+        if (dot(lab.yz, intersection.yz) < 1e-8) {
             continue;
         }
 
         float intersection_chroma = length(intersection.yz);
-        if (intersection_chroma > peak_chroma) {
-            peak_chroma = intersection_chroma;
-            lab_at_peak_chroma = intersection;
+        if (intersection_chroma > lc_at_extrema[0].y) {
+            lc_at_extrema[0] = vec2(intersection.x, intersection_chroma);
+            lab_at_extrema[0] = intersection;
+        }
+        if (intersection.x < lc_at_extrema[1].x) {
+            lc_at_extrema[1] = vec2(intersection.x, intersection_chroma);
+            lab_at_extrema[1] = intersection;
+        }
+        if (intersection.x > lc_at_extrema[2].x) {
+            lc_at_extrema[2] = vec2(intersection.x, intersection_chroma);
+            lab_at_extrema[2] = intersection;
         }
     }
 
-    return lab_at_peak_chroma;
+    if (gray_range.x < lc_at_extrema[1].x) {
+        lab_at_extrema[1] = vec3(gray_range.x, 0, 0);
+    } else if (lc_at_extrema[1].y > gray_chroma_tolerance) {
+        lab_at_extrema[1] = mix(vec3(gray_range.x, 0, 0), lab_at_extrema[1], gray_chroma_tolerance / lc_at_extrema[1].y);
+    }
+
+    if (gray_range.y > lc_at_extrema[2].x) {
+        lab_at_extrema[2] = vec3(gray_range.y, 0, 0);
+    } else if (lc_at_extrema[2].y > gray_chroma_tolerance) {
+        lab_at_extrema[2] = mix(vec3(gray_range.y, 0, 0), lab_at_extrema[2], gray_chroma_tolerance / lc_at_extrema[2].y);
+    }
+
+    return lab_at_extrema;
 }
 
 // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent
-vec3 compute_gamut_clamp_target(float alpha, const float l, const float chroma) {
+vec3 compute_gamut_clamp_target(float alpha, vec3 lab, float chroma, mat3 extrema) {
+    float range = extrema[2].x - extrema[1].x;
+    float l_start = (lab.x - extrema[1].x) / range;
     if (alpha < 1e-4) {
-        return vec3(clamp(l, gray_range.x, gray_range.y), 0, 0);
+        return mix(extrema[1], extrema[2], clamp(l_start, 0.0, 1.0));
     }
 
-    float range = gray_range.y - gray_range.x;
-
-    float l_start = (l - gray_range.x) / range;
     float l_diff = l_start - 0.5;
     float e_1 = 0.5 + abs(l_diff) + alpha * chroma;
     float l_target = (1.0 + sign(l_diff) * (e_1 - sqrt(max(0.0, e_1 * e_1 - 2.0 * abs(l_diff))))) * 0.5;
 
-    return vec3(l_target * range + gray_range.x, 0, 0);
+    return mix(extrema[1], extrema[2], l_target);
 }
 
 // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-dependent
-vec3 compute_gamut_clamp_target_hue_dependent(float alpha, const vec3 lab, const float chroma) {
+vec3 compute_gamut_clamp_target_hue_dependent(float alpha, vec3 lab, float chroma, mat3 extrema) {
+    float range = extrema[2].x - extrema[1].x;
+    float l_start = (lab.x - extrema[1].x) / range;
     if (alpha < 1e-4) {
-        return vec3(clamp(lab.x, gray_range.x, gray_range.y), 0, 0);
+        return mix(extrema[1], extrema[2], clamp(l_start, 0.0, 1.0));
     }
 
-    float range = gray_range.y - gray_range.x;
-
-    float l_start = (lab.x - gray_range.x) / range;
-    float l_peak = (find_peak_chroma(lab).x - gray_range.x) / range;
+    float l_peak = (extrema[0].x - extrema[1].x) / range;
     float l_diff = l_start - l_peak;
     float k = 2.0 * (l_diff >= 0.0 ? (1.0 - l_peak) : l_peak);
     float e_1 = k / 2.0 + abs(l_diff) + alpha * chroma / k;
     float l_target = l_peak + (sign(l_diff) * (e_1 - sqrt(max(0.0, e_1 * e_1 - 2.0 * k * abs(l_diff))))) * 0.5;
 
-    return vec3(l_target * range + gray_range.x, 0, 0);
+    return mix(extrema[1], extrema[2], l_target);
 }
 
 vec3 clamp_to_palette_gamut(vec3 lab) {
     float chroma = length(lab.yz);
-    float alpha = lightness_adaptation_factor;
-    vec2 min_max_gray = gray_range + vec2(1e-4, -1e-4);
     if (chroma < 1e-4) {
         return vec3(clamp(lab.x, gray_range.x, gray_range.y), 0, 0);
     }
 
-    //vec3 target = compute_gamut_clamp_target(alpha, lab.x, chroma);
-    vec3 target = compute_gamut_clamp_target_hue_dependent(alpha, lab, chroma);
+    float alpha = lightness_adaptation_factor;
+    mat3 extrema = find_hue_extrema(lab);
+    //vec3 target = compute_gamut_clamp_target(alpha, lab, chroma, extrema);
+    vec3 target = compute_gamut_clamp_target_hue_dependent(alpha, lab, chroma, extrema);
+
     vec3 clamp_direction = normalize(target - lab);
     vec2 hue_chroma = normalize(lab.yz);
 
@@ -215,14 +245,24 @@ void mainImage(out vec4 frag_color, in vec2 frag_coord) {
 
     float f = 1.0;
     if (uv.x > 0.5) {
-        lab = find_peak_chroma(lab);
+        mat3 extrema = find_hue_extrema(lab);
+        if (uv.y < 0.333) {
+            lab = extrema[1];
+        } else if (uv.y < 0.667) {
+            lab = extrema[0];
+        } else {
+            lab = extrema[2];
+        }
     } else if (!lab_inside_palette_gamut(lab)) {
         lab = clamp_to_palette_gamut(lab);
         f = 0.75;
     }
 
     if (!lab_inside_palette_gamut(lab)) {
-        lab = vec3(1, 1, 0); // Problem!
+        ivec2 grid_coords = ivec2(frag_coord.xy / 20.0) % 2;
+        if ((grid_coords.x ^ grid_coords.y) == 0) {
+            lab = vec3(1, 1, 0); // Problem!
+        }
     }
 
     vec3 srgb = linear_srgb_from_oklab(lab) * f;

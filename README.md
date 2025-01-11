@@ -137,7 +137,14 @@ dynamic range into the output palette.
 range into the output palette. Larger values increase contrat in the mid range,
 at the cost of compressing the shadows and highlights.
 - Sharpening: edge sharpening, useful to recover some details after the resize.
-- Clipped chroma recovery: α value described [here](https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent),
+- Gray chroma tolerance: allow some chroma in the in the blacks and whites,
+at the exchange of more contrast.
+- Hue dependent chroma clamping: if true use the algorithm described
+[here](https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-dependent),
+otherwise use the algorithm described
+[here](https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent).
+Hue dependent typically gives better results and is the default. It's slightly slower.
+- Clipped chroma recovery: α value mentioned in the hue clamping algorithms above,
 used to recover some color from the clipped highlights caused by gamut mapping.
 - Dither error attenuation: exponential attenuation factor applied to the dither
 error before diffusion. Helps reduce smearing caused by small errors being

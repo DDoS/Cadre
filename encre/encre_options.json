@@ -14,7 +14,7 @@
     "dynamic_range": {
         "display_name": "Dynamic range",
         "type": "number",
-        "placeholder": "ex: 0.95"
+        "placeholder": "ex: 0.85"
     },
     "exposure": {
         "display_name": "Exposure",
@@ -34,12 +34,22 @@
     "sharpening": {
         "display_name": "Sharpening",
         "type": "number",
-        "placeholder": "ex: 4"
+        "placeholder": "ex: 3"
+    },
+    "gray_chroma_tolerance": {
+        "display_name": "Gray chroma tolerance",
+        "type": "number",
+        "placeholder": "ex: 2.5"
+    },
+    "hue_dependent_chroma_clamping": {
+        "display_name": "Hue dependent chroma clamping",
+        "type": "boolean",
+        "default": "true"
     },
     "clipped_chroma_recovery": {
         "display_name": "Clipped chroma recovery",
         "type": "number",
-        "placeholder": "ex: 1"
+        "placeholder": "ex: 10"
     },
     "error_attenuation": {
         "display_name": "Dither error attenuation",

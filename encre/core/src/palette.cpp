@@ -11,12 +11,25 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include <unordered_map>
+
 #ifdef PRINT_HULL
 #include <iostream>
 #endif
 
 namespace encre {
     const Palette eink_gallery_palette_palette = make_palette(
+        std::to_array<CIELab>({
+            {15.45f, 0, 0}, // Black
+            {73.65f, 0, 0}, // White
+            {42.76f, -31.94f, 16.43f}, // Green
+            {28.f, 9.2f, -25.f}, // Blue
+            {49.02f, 35.9f, 17.4f}, // Red
+            {68.38f, -4.95f, 56.42f}, // Yellow
+            {55.04f, 24.9f, 30.f}, // Orange
+        })
+    );
+    const Palette eink_gallery_palette_accurate_palette = make_palette(
         std::to_array<CIELab>({
             {15.45f, 5.08f, -8.48f}, // Black
             {73.65f, -1.01f, 2.65f}, // White
@@ -30,6 +43,16 @@ namespace encre {
 
     const Palette eink_spectra_6_palette = make_palette(
         std::to_array<CIELab>({
+            {21.60f, 0, 0}, // Black
+            {90.25f, 0, 0}, // White
+            {84.43f, -3.30f, 74.66f}, // Yellow
+            {37.85f, 43.36f, 29.41f}, // Red
+            {45.22f, 14.33f, -53.44f}, // Blue
+            {51.25f, -24.45f, 21.48f}, // Green
+        })
+    );
+    const Palette eink_spectra_6_accurate_palette = make_palette(
+        std::to_array<CIELab>({
             {21.60f, 4.86f, -8.00f}, // Black
             {90.25f, -0.99f, 2.05f}, // White
             {84.43f, -3.30f, 74.66f}, // Yellow
@@ -42,7 +65,9 @@ namespace encre {
     // Using std::map to keep the name ordering consistent
     const std::map<std::string, Palette> palette_by_name{
         {"eink_gallery_palette", eink_gallery_palette_palette},
+        {"eink_gallery_palette_accurate", eink_gallery_palette_accurate_palette},
         {"eink_spectra_6", eink_spectra_6_palette},
+        {"eink_spectra_6_accurate", eink_spectra_6_accurate_palette},
     };
 
     Palette make_palette(std::span<const CIEXYZ> colors, float target_lightness) {
@@ -84,6 +109,11 @@ namespace encre {
 
         const auto hull = orgQhull::Qhull("", 3, static_cast<int>(point_count), points_flattened.data(), "Qt");
 
+        #ifdef PRINT_HULL
+        std::cout << "const int palette_vertex_count = " << hull.vertexCount() << ";\n";
+        std::cout << "const vec3[palette_vertex_count] palette_vertices = vec3[palette_vertex_count](\n";
+        #endif
+
         std::vector<Oklab> gamut_vertices;
         gamut_vertices.reserve(hull.vertexCount());
         for (const auto& vertex : hull.vertexList()) {
@@ -92,11 +122,70 @@ namespace encre {
                 static_cast<float>(coordinates[0]),
                 static_cast<float>(coordinates[1]),
                 static_cast<float>(coordinates[2])});
+
+            #ifdef PRINT_HULL
+            std::cout << "    vec3(" << coordinates[0] << ", " << coordinates[1] << ", " << coordinates[2] << ") / 100.0";
+            if (gamut_vertices.size() < hull.vertexCount()) {
+                std::cout << ",";
+            }
+            std::cout << "\n";
+            #endif
+        }
+
+        const auto edge_count = hull.facetCount() + hull.vertexCount() - 2; // Euler's formula
+        #ifdef PRINT_HULL
+        std::cout << ");\n";
+        std::cout << "const int palette_edge_count = " << edge_count << ";\n";
+        std::cout << "const mat2x3[palette_edge_count] palette_edges = mat2x3[palette_edge_count](\n";
+        #endif
+
+        std::unordered_map<countT, Edge> gamut_edges_by_id;
+        gamut_edges_by_id.reserve(edge_count);
+        for (const auto& facet : hull.facetList()) {
+            qh_makeridges(hull.qh(), facet.getFacetT());
+            for (const auto& ridge : facet.ridges()) {
+                if (gamut_edges_by_id.contains(ridge.id())) {
+                    continue;
+                }
+
+                const auto& vertices = ridge.vertices();
+                const auto start_coordinates = vertices.first().point().coordinates();
+                const auto end_coordinates = vertices.last().point().coordinates();
+                const Edge edge{
+                    {
+                        static_cast<float>(start_coordinates[0]),
+                        static_cast<float>(start_coordinates[1]),
+                        static_cast<float>(start_coordinates[2])
+                    },
+                    {
+                        static_cast<float>(end_coordinates[0]),
+                        static_cast<float>(end_coordinates[1]),
+                        static_cast<float>(end_coordinates[2])
+                    }
+                };
+                gamut_edges_by_id[ridge.id()] = edge;
+
+                #ifdef PRINT_HULL
+                std::cout << "    mat2x3(vec3(" << edge[0][0] << ", " << edge[0][1] << ", " << edge[0][2] << ")," <<
+                        " vec3(" << edge[1][0] << ", " << edge[1][1] << ", " << edge[1][2] << ")) / 100.0";
+                if (gamut_edges_by_id.size() < edge_count) {
+                    std::cout << ",";
+                }
+                std::cout << "\n";
+                #endif
+            }
+        }
+
+        std::vector<Edge> gamut_edges;
+        gamut_edges.reserve(edge_count);
+        for (const auto& [_, edge] : gamut_edges_by_id) {
+            gamut_edges.push_back(edge);
         }
 
         #ifdef PRINT_HULL
-        std::cout << "const int palette_hull_facet_count = " << hull.facetCount() << ";\n";
-        std::cout << "const vec4[palette_hull_facet_count] palette_hull = vec4[palette_hull_facet_count](\n";
+        std::cout << ");\n";
+        std::cout << "const int palette_facet_count = " << hull.facetCount() << ";\n";
+        std::cout << "const vec4[palette_facet_count] palette_facets = vec4[palette_facet_count](\n";
         #endif
 
         std::vector<Plane> gamut_planes;
@@ -112,7 +201,7 @@ namespace encre {
 
             #ifdef PRINT_HULL
             std::cout << "    vec4(" << coordinates[0] << ", " << coordinates[1] << ", " <<
-                    coordinates[2] << ", " << plane.offset() / 100 << ")";
+                    coordinates[2] << ", " << plane.offset() << " / 100.0)";
             if (gamut_planes.size() < hull.facetCount()) {
                 std::cout << ",";
             }
@@ -132,16 +221,18 @@ namespace encre {
 
         #ifdef PRINT_HULL
         std::cout << ");\n";
-        std::cout << "const vec2 gray_line = vec2(" << min_gray_l / 100 << ", " << max_gray_l / 100 << ");\n\n";
+        std::cout << "const vec2 gray_range = vec2(" << min_gray_l << ", " << max_gray_l << ") / 100.0;\n\n";
         #endif
 
         return {
             .points = std::move(points),
             .gamut_vertices = std::move(gamut_vertices),
+            .gamut_edges = std::move(gamut_edges),
             .gamut_planes = std::move(gamut_planes),
-            .gray_line = {min_gray_l, max_gray_l},
+            .gray_range = {min_gray_l, max_gray_l},
             .lightness_range = l_extents.y - l_extents.x,
-            .max_chroma = c_max};
+            .max_chroma = c_max
+        };
     }
 
     Palette make_palette(std::span<const CIELab> lab_colors, float target_lightness) {

@@ -8,8 +8,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/gtx/compatibility.hpp>
 
-#include <random>
-
 namespace {
     constexpr float epsilon = 1e-5f;
     constexpr auto lightness_relative_scale = 0.5f;
@@ -25,31 +23,112 @@ namespace {
         return true;
     }
 
-    // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent
-    glm::vec3 compute_gamut_clamp_target(const encre::Palette& palette, float alpha, float l, float chroma) {
-        if (alpha < epsilon) {
-            return {glm::clamp(l, palette.gray_line.x, palette.gray_line.y), 0, 0};
+    glm::mat3 find_hue_extrema(const encre::Palette& palette, const glm::vec3& lab, float gray_chroma_tolerance) {
+        const auto hue_normal = glm::normalize(glm::vec3(0, -lab.z, lab.y));
+
+        auto lc_at_extrema = glm::mat3x2(glm::vec2(0, 0), glm::vec2(1e10, 0), glm::vec2(0, 0));
+        auto lab_at_extrema = glm::mat3(glm::vec3(glm::mix(palette.gray_range.x, palette.gray_range.y, 0.5), 0, 0),
+                glm::vec3(0), glm::vec3(0));
+
+        for (const auto& edge : palette.gamut_edges) {
+            const auto edge_start = edge[0];
+            const auto edge_delta = edge[1] - edge_start;
+            const auto edge_length = glm::length(edge_delta);
+            const auto edge_direction = edge_delta / edge_length;
+            const auto d = glm::dot(edge_direction, hue_normal);
+            if (abs(d) < epsilon) {
+                continue;
+            }
+
+            const auto t = glm::dot(-edge_start, hue_normal) / d;
+            if (t < 0 || t > edge_length) {
+                continue;
+            }
+
+            const auto intersection = edge_start + t * edge_direction;
+            if (glm::dot(glm::yz(lab), glm::yz(intersection)) < epsilon * epsilon) {
+                continue;
+            }
+
+            const auto intersection_chroma = glm::length(glm::yz(intersection));
+            if (intersection_chroma > lc_at_extrema[0].y) {
+                lc_at_extrema[0] = glm::vec2(intersection.x, intersection_chroma);
+                lab_at_extrema[0] = intersection;
+            }
+            if (intersection.x < lc_at_extrema[1].x) {
+                lc_at_extrema[1] = glm::vec2(intersection.x, intersection_chroma);
+                lab_at_extrema[1] = intersection;
+            }
+            if (intersection.x > lc_at_extrema[2].x) {
+                lc_at_extrema[2] = glm::vec2(intersection.x, intersection_chroma);
+                lab_at_extrema[2] = intersection;
+            }
         }
 
-        const auto range = palette.gray_line.y - palette.gray_line.x;
+        if (palette.gray_range.x < lc_at_extrema[1].x) {
+            lab_at_extrema[1] = glm::vec3(palette.gray_range.x, 0, 0);
+        } else if (lc_at_extrema[1].y > gray_chroma_tolerance) {
+            lab_at_extrema[1] = mix(glm::vec3(palette.gray_range.x, 0, 0),
+                lab_at_extrema[1], gray_chroma_tolerance / lc_at_extrema[1].y);
+        }
 
-        const auto l_start = (l - palette.gray_line.x) / range;
+        if (palette.gray_range.y > lc_at_extrema[2].x) {
+            lab_at_extrema[2] = glm::vec3(palette.gray_range.y, 0, 0);
+        } else if (lc_at_extrema[2].y > gray_chroma_tolerance) {
+            lab_at_extrema[2] = glm::mix(glm::vec3(palette.gray_range.y, 0, 0),
+                lab_at_extrema[2], gray_chroma_tolerance / lc_at_extrema[2].y);
+        }
+
+        return lab_at_extrema;
+    }
+
+    // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-independent
+    glm::vec3 compute_gamut_clamp_target(const encre::Palette& palette, float alpha,
+            const glm::vec3& lab, float chroma, const glm::mat3& extrema) {
+        float range = extrema[2].x - extrema[1].x;
+        float l_start = (lab.x - extrema[1].x) / range;
+        if (alpha < epsilon) {
+            return glm::mix(extrema[1], extrema[2], glm::clamp(l_start, 0.0f, 1.0f));
+        }
+
         const auto l_diff = l_start - 0.5f;
         const auto e_1 = 0.5f + glm::abs(l_diff) + alpha * chroma * 0.01f;
         const auto l_target = (1 + glm::sign(l_diff) * (e_1 - glm::sqrt(glm::max(0.f, e_1 * e_1 - 2 * glm::abs(l_diff))))) * 0.5f;
 
-        return {l_target * range + palette.gray_line.x, 0, 0};
+        return glm::mix(extrema[1], extrema[2], l_target);
     }
 
-    glm::vec3 clamp_to_palette_gamut(const encre::Palette& palette, float clipped_chroma_recovery, const glm::vec3& lab) {
-        const auto chroma = glm::length(glm::yz(lab));
-        const auto alpha = clipped_chroma_recovery;
-        const auto min_max_gray = palette.gray_line + encre::Line(epsilon, -epsilon);
-        if (chroma < epsilon) {
-            return {glm::clamp(lab.x, palette.gray_line.x, palette.gray_line.y), 0, 0};
+    // From https://bottosson.github.io/posts/gamutclipping/#adaptive-%2C-hue-dependent
+    glm::vec3 compute_gamut_clamp_target_hue_dependent(const encre::Palette& palette, float alpha,
+            const glm::vec3& lab, float chroma, const glm::mat3& extrema) {
+        float range = extrema[2].x - extrema[1].x;
+        float l_start = (lab.x - extrema[1].x) / range;
+        if (alpha < epsilon) {
+            return glm::mix(extrema[1], extrema[2], glm::clamp(l_start, 0.0f, 1.0f));
         }
 
-        const auto target = compute_gamut_clamp_target(palette, alpha, lab.x, chroma);
+        const auto l_peak = (extrema[0].x - extrema[1].x) / range;
+        const auto l_diff = l_start - l_peak;
+        const auto k = 2 * (l_diff >= 0 ? (1 - l_peak) : l_peak);
+        const auto e_1 = k / 2 + abs(l_diff) + alpha * chroma * 0.01f / k;
+        const auto l_target = l_peak + (glm::sign(l_diff) *
+                (e_1 - glm::sqrt(glm::max(0.f, e_1 * e_1 - 2 * k * glm::abs(l_diff))))) * 0.5f;
+
+        return glm::mix(extrema[1], extrema[2], l_target);
+    }
+
+    glm::vec3 clamp_to_palette_gamut(const encre::Palette& palette, float gray_chroma_tolerance, bool hue_dependent_chroma_clamping,
+            float clipped_chroma_recovery, const glm::vec3& lab) {
+        const auto chroma = glm::length(glm::yz(lab));
+        if (chroma < epsilon) {
+            return {glm::clamp(lab.x, palette.gray_range.x, palette.gray_range.y), 0, 0};
+        }
+
+        const auto alpha = clipped_chroma_recovery;
+        const auto extrema = find_hue_extrema(palette, lab, gray_chroma_tolerance);
+        const auto target = hue_dependent_chroma_clamping ?
+                compute_gamut_clamp_target_hue_dependent(palette, alpha, lab, chroma, extrema) :
+                compute_gamut_clamp_target(palette, alpha, lab, chroma, extrema);
         const auto clamp_direction = glm::normalize(target - lab);
         const auto hue_chroma = glm::normalize(glm::yz(lab));
 
@@ -80,7 +159,8 @@ namespace {
         return clamped_lab;
     }
 
-    void clamp_gamut_batch(const encre::Palette& palette, float clipped_chroma_recovery, const vips::VRegion& in_region) {
+    void clamp_gamut_batch(const encre::Palette& palette, float gray_chroma_tolerance, bool hue_dependent_chroma_clamping,
+            float clipped_chroma_recovery, const vips::VRegion& in_region) {
         const auto in_rectangle = in_region.valid();
 
         for (int y = 0; y < in_rectangle.height; y++) {
@@ -93,7 +173,8 @@ namespace {
                     continue;
                 }
 
-                const auto clamped_lab = clamp_to_palette_gamut(palette, clipped_chroma_recovery, lab);
+                const auto clamped_lab = clamp_to_palette_gamut(palette, gray_chroma_tolerance, hue_dependent_chroma_clamping,
+                    clipped_chroma_recovery, lab);
 
                 #ifndef NDEBUG
                 if (!glm::all(glm::isfinite(clamped_lab)) || !is_inside_palette_gamut(palette, clamped_lab)) {
@@ -185,8 +266,8 @@ namespace {
 }
 
 namespace encre {
-    void dither(vips::VImage& in, const Palette& palette, float clipped_chroma_recovery, float error_attenuation,
-            std::span<uint8_t> result) {
+    void dither(vips::VImage& in, const Palette& palette, float gray_chroma_tolerance, bool hue_dependent_chroma_clamping,
+            float clipped_chroma_recovery, float error_attenuation, std::span<uint8_t> result) {
         if (vips_check_uncoded("dither", in.get_image()) ||
                 vips_check_bands("dither", in.get_image(), 3) ||
                 vips_check_format("dither", in.get_image(), VIPS_FORMAT_FLOAT)) {
@@ -205,7 +286,7 @@ namespace encre {
 
         for (int y = 0; y < height; y++) {
             in_region.prepare(0, y, width, 1);
-            clamp_gamut_batch(palette, clipped_chroma_recovery, in_region);
+            clamp_gamut_batch(palette, gray_chroma_tolerance, hue_dependent_chroma_clamping, clipped_chroma_recovery, in_region);
         }
 
         for (int y = 0; y < height; y++) {

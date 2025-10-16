@@ -1,8 +1,12 @@
-Starting from a clean Raspbian Lite Bookworm install.
+Starting from a clean Raspbian Lite Bookworm or Trixie install.
 
-Increase size of swap if you have less than 2GB:
+Increase size of swap if you have less than 2GB of RAM.
+On Bookworm:
     in /etc/dphys-swapfile, set CONF_SWAPFILE=2048
     run: sudo dphys-swapfile setup
+On Trixie:
+    in /etc/rpi/swap.conf, set Mechanism=swapfile
+    reboot
 
 Install:
     git git-lfs g++ cmake ninja-build libvips-dev python3-dev

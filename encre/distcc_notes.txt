@@ -3,12 +3,9 @@ One solution is to use distcc to offload the compilation to another faster devic
 
 First setup distcc on the device that will do the building. It should be on your
 local network, and capable of compiling either natively or "cross" to aarch64-linux-gnu,
-with the same compiler version your build target.
-Install distcc from the package manager, then edit /etc/default/distcc:
-    STARTDISTCC="true"
-    ALLOWEDNETS="10.0.0.0/8 192.168.0.0/16 172.16.0.0/12 127.0.0.0/8"
-    LISTENER="0.0.0.0"
-Enable the service: systemctl enable distcc && systemctl start distcc
+with the same compiler version your build target. Install distcc from the package manager,
+then run: sudo dpkg-reconfigure distcc. From the UI, enable the daemon, set the allowed
+clients to your network (for example 192.168.0.0/16) and the listen interface to 0.0.0.0.
 
 On the target device, also install distcc, then in ~/.distcc/hosts add a single
 line with the build device hostname (for example: "laptop.local"). You can setup

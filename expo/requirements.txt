@@ -4,5 +4,5 @@ croniter
 APScheduler
 requests
 setuptools
-marshmallow
+marshmallow==3.26.1
 marshmallow-jsonschema

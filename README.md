@@ -76,11 +76,13 @@ set using `--display-config <json>`.
 - [Good Display E6 7.3" display (GDEP073E01)](https://buyepaper.com/products/gdep073e01)
     - Name: `GDEP073E01`
     - Install [requirements-spi](affiche/requirements-spi.txt).
+        - If you run into a build error regarding `lgpio`, follow the install instructions [here](https://abyz.me.uk/lg/download.html)
     - Enable SPI0 with CS0 (default).
     - Check the [source file](encre/display/GDEP073E01.py) for the pinout.
 - [Waveshare 13.3inch e-Paper (E)](https://www.waveshare.com/13.3inch-e-paper-hat-plus-e.htm?sku=29353)
     - Name: `EL133UF1`
     - Install [requirements-spi](affiche/requirements-spi.txt).
+        - If you run into a build error regarding `lgpio`, follow the install instructions [here](https://abyz.me.uk/lg/download.html)
     - Enable SPI0 but disable CS0 and CS1 (in `/boot/firmware/config.txt` add `dtoverlay=spi0-0cs`).
     - Check the [source file](encre/display/EL133UF1.py) for the pinout.
 - Proxy
@@ -162,7 +164,9 @@ After building [Encre](#encre), create a Python virtual environment, and install
 
 Start the server using `start.sh`. Use `stop.sh` if you need to stop the server when it's running
 in the background. You might need to change system settings to make port `80` available without
-privileges. The simplest solution is to run `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80`.
+privileges. The simplest solution is to run `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80`
+(or set `net.ipv4.ip_unprivileged_port_start=80` in `/etc/sysctl.d/50-unprivileged-ports.conf` to
+make this permanent).
 
 The server should be available at the host's LAN address on port `80`.
 

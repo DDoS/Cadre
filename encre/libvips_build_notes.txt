@@ -14,9 +14,9 @@ Feel free to trim down to what actually want.
 Choose a directory to build the dependencies in, such as `~/source`.
 
 Build latest ImageMagick:
-    run: git clone --depth 1 --branch <latest version tag>  https://github.com/ImageMagick/ImageMagick.git
+    run: git clone --depth 1 --branch <latest version tag> https://github.com/ImageMagick/ImageMagick.git
     run: ./configure --with-modules --prefix="`pwd`/install"
-    run: make && make install
+    run: make -j<job count> && make install
     run: sudo ldconfig "`pwd`/ImageMagick/install/lib"
     add to your ~/.profile:
         export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:<ImageMagick path>/install/lib"
